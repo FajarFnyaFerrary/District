@@ -72,7 +72,7 @@ end
 -- */  Window  /* --
 local Window = WindUI:CreateWindow({
 	Title = ".ftgs hub  |  WindUI Example",
-	--Author = "by .ftgs • Footagesus",
+	--Author = "by .ftgs • Zetttify",
 	Folder = "ftgshub",
 	Icon = "solar:folder-2-bold-duotone",
 	--Theme = "Mellowsi",
@@ -282,7 +282,7 @@ do
 	AboutSection:Space()
 
 	AboutSection:Section({
-		Title = "WindUI is a stylish, open-source UI (User Interface) library specifically designed for Roblox Script Hubs.\nDeveloped by Footagesus (.ftgs, Footages).\nIt aims to provide developers with a modern, customizable, and easy-to-use toolkit for creating visually appealing interfaces within Roblox.\nThe project is primarily written in Lua (Luau), the scripting language used in Roblox.",
+		Title = "WindUI is a stylish, open-source UI (User Interface) library specifically designed for Roblox Script Hubs.\nDeveloped by Zetttify (.ftgs, Footages).\nIt aims to provide developers with a modern, customizable, and easy-to-use toolkit for creating visually appealing interfaces within Roblox.\nThe project is primarily written in Lua (Luau), the scripting language used in Roblox.",
 		TextSize = 18,
 		TextTransparency = 0.35,
 		FontWeight = Enum.FontWeight.Medium,
@@ -877,7 +877,7 @@ if not RunService:IsStudio() and writefile and printidentity() then
 			Border = true,
 		})
 
-		-- All elements are taken from the official documentation: https://footagesus.github.io/WindUI-Docs/docs
+		-- All elements are taken from the official documentation: https://Zetttify.github.io/WindUI-Docs/docs
 
 		-- Saving elements to the config using `Flag`
 
