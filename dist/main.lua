@@ -2132,7 +2132,7 @@ New=a.load'i'.New
 return[[
 {
     "name": "windui",
-    "version": "1.6.65",
+    "version": "1.0.0",
     "main": "./dist/main.lua",
     "repository": "https://github.com/FajarFnyaFerrary/District",
     "discord": "https://discord.gg/ftgs-development-hub-1300692552005189632",
