@@ -48,6 +48,19 @@ local Window = WindUI:CreateWindow({
 	Author = "by Fajar",
 	Icon = "solar:crown-bold",
 	Theme = ThemeName,
+
+	KeySystem = {
+		Note = "Please login using your key.",
+		API = {
+			{
+				Type = "platoboost",
+				ServiceId = 26195,
+				Secret = "8d7de7ed-e9d3-47ab-a6ee-911d31ef4647",
+			},
+		},
+		SaveKey = false,
+	},
+	
 	NewElements = true,
 	Transparent = true,
 	ToggleKey = Enum.KeyCode.F,
