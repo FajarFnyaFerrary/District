@@ -66,7 +66,7 @@ local Window = WindUI:CreateWindow({
 				Secret = "8d7de7ed-e9d3-47ab-a6ee-911d31ef4647",
 			},
 		},
-		SaveKey = true,
+		SaveKey = false,
 	},
 
 	Topbar = {
