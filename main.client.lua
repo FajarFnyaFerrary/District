@@ -71,7 +71,7 @@ end
 
 -- */  Window  /* --
 local Window = WindUI:CreateWindow({
-	Title = ".ftgs hub  |  WindUI Example",
+	Title = "Zetttify | Violence District v.Free",
 	--Author = "by .ftgs • Zetttify",
 	Folder = "ftgshub",
 	Icon = "solar:folder-2-bold-duotone",
