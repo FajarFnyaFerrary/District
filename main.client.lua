@@ -96,6 +96,21 @@ local Window = WindUI:CreateWindow({
 			Color3.fromHex("#e7ff2f")
 		),
 	},
+
+	KeySystem = {
+		Note = "Please login using your key.",
+
+		API = {
+			{
+				Type = "platoboost",
+				ServiceId = 26195,
+				Secret = "8d7de7ed-e9d3-47ab-a6ee-911d31ef4647",
+			},
+		},
+
+		SaveKey = true,
+	},
+	
 	Topbar = {
 		Height = 44,
 		ButtonsType = "Mac", -- Default or Mac
