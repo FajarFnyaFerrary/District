@@ -1,9 +1,9 @@
 local RunService = game:GetService("RunService")
---[[
-
-    WindUI Example (wip)
-    
-]]
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
 local cloneref = (cloneref or clonereference or function(instance)
 	return instance
@@ -11,6 +11,9 @@ end)
 local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
 local HttpService = cloneref(game:GetService("HttpService"))
 
+-- ============================================================
+-- WindUI Loader
+-- ============================================================
 local WindUI
 
 do
@@ -30,68 +33,25 @@ do
 	end
 end
 
---[[
-
-WindUI.Creator.AddIcons("solar", {
-    ["CheckSquareBold"] = "rbxassetid://132438947521974",
-    ["CursorSquareBold"] = "rbxassetid://120306472146156",
-    ["FileTextBold"] = "rbxassetid://89294979831077",
-    ["FolderWithFilesBold"] = "rbxassetid://74631950400584",
-    ["HamburgerMenuBold"] = "rbxassetid://134384554225463",
-    ["Home2Bold"] = "rbxassetid://92190299966310",
-    ["InfoSquareBold"] = "rbxassetid://119096461016615",
-    ["PasswordMinimalisticInputBold"] = "rbxassetid://109919668957167",
-    ["SolarSquareTransferHorizontalBold"] = "rbxassetid://125444491429160",
-})--]]
-
-function createPopup()
-	return WindUI:Popup({
-		Title = "Welcome to the WindUI!",
-		Icon = "bird",
-		Content = "Hello!",
-		Buttons = {
-			{
-				Title = "Hahaha",
-				Icon = "bird",
-				Variant = "Tertiary",
-			},
-			{
-				Title = "Hahaha",
-				Icon = "bird",
-				Variant = "Tertiary",
-			},
-			{
-				Title = "Hahaha",
-				Icon = "bird",
-				Variant = "Tertiary",
-			},
-		},
-	})
-end
-
--- */  Window  /* --
+-- ============================================================
+-- Window Setup
+-- ============================================================
 local Window = WindUI:CreateWindow({
 	Title = "Zetttify | Violence District VFree",
-	--Author = "by .ftgs • Footagesus",
 	Folder = "ftgshub",
 	Icon = "solar:folder-2-bold-duotone",
-	--Theme = "Mellowsi",
-	--IconSize = 22*2,
 	NewElements = true,
-	--Size = UDim2.fromOffset(700,700),
-
 	HideSearchBar = false,
 
 	OpenButton = {
-		Title = "OPEN MENU", -- can be changed
-		CornerRadius = UDim.new(1, 0), -- fully rounded
-		StrokeThickness = 3, -- removing outline
-		Enabled = true, -- enable or disable openbutton
+		Title = "OPEN MENU",
+		CornerRadius = UDim.new(1, 0),
+		StrokeThickness = 3,
+		Enabled = true,
 		Draggable = true,
 		OnlyMobile = false,
 		Scale = 0.5,
-
-		Color = ColorSequence.new( -- gradient
+		Color = ColorSequence.new(
 			Color3.fromHex("#30FF6A"),
 			Color3.fromHex("#e7ff2f")
 		),
@@ -99,7 +59,6 @@ local Window = WindUI:CreateWindow({
 
 	KeySystem = {
 		Note = "Please login using your key.",
-
 		API = {
 			{
 				Type = "platoboost",
@@ -107,21 +66,18 @@ local Window = WindUI:CreateWindow({
 				Secret = "8d7de7ed-e9d3-47ab-a6ee-911d31ef4647",
 			},
 		},
-
 		SaveKey = true,
 	},
-	
+
 	Topbar = {
 		Height = 44,
-		ButtonsType = "Mac", -- Default or Mac
+		ButtonsType = "Mac",
 	},
 })
 
---createPopup()
-
---Window:SetUIScale(.8)
-
--- */  Tags  /* --
+-- ============================================================
+-- Tag
+-- ============================================================
 do
 	Window:Tag({
 		Title = "v" .. WindUI.Version,
@@ -131,1251 +87,1413 @@ do
 	})
 end
 
--- */  Colors  /* --
+-- ============================================================
+-- Colors
+-- ============================================================
 local Purple = Color3.fromHex("#7775F2")
 local Yellow = Color3.fromHex("#ECA201")
 local Green = Color3.fromHex("#10C550")
 local Grey = Color3.fromHex("#83889E")
 local Blue = Color3.fromHex("#257AF7")
 local Red = Color3.fromHex("#EF4F1D")
+local Orange = Color3.fromHex("#FF8C00")
+local White = Color3.fromHex("#FFFFFF")
 
--- */ Other Functions /* --
-local function parseJSON(luau_table, indent, level, visited)
-	indent = indent or 2
-	level = level or 0
-	visited = visited or {}
+-- ============================================================
+-- ESP System
+-- ============================================================
+local ESPObjects = {} -- stores all Highlight instances for cleanup
+local ESPConfig = {
+	KillerESP = false,
+	SurvivorESP = false,
+	GeneratorESP = false,
+	GateESP = false,
+	HookESP = false,
+	PalletESP = false,
+	ShowOnlyClosestHook = false,
+	ESPDistance = true,
+	ESPName = true,
+	CustomTransparency = 0.5,
+}
 
-	local currentIndent = string.rep(" ", level * indent)
-	local nextIndent = string.rep(" ", (level + 1) * indent)
+local function clearESP(category)
+	if ESPObjects[category] then
+		for _, obj in ipairs(ESPObjects[category]) do
+			if obj and obj.Parent then
+				obj:Destroy()
+			end
+		end
+		ESPObjects[category] = {}
+	end
+end
 
-	if luau_table == nil then
-		return "null"
+local function clearAllESP()
+	for cat in pairs(ESPObjects) do
+		clearESP(cat)
+	end
+end
+
+local function createHighlight(instance, color, transparency, name)
+	if not instance or not instance:IsA("Model") then return nil end
+	if not instance:FindFirstChildOfClass("Highlight") then
+		local hl = Instance.new("Highlight")
+		hl.Name = "ESP_" .. (name or "Object")
+		hl.Adornee = instance
+		hl.FillColor = color
+		hl.OutlineColor = color
+		hl.FillTransparency = transparency or ESPConfig.CustomTransparency
+		hl.OutlineTransparency = 0
+		hl.Parent = instance
+		return hl
+	end
+	return nil
+end
+
+-- Helper: get character from player
+local function getCharacter(player)
+	if player and player.Character then
+		return player.Character
+	end
+	return nil
+end
+
+-- Helper: get humanoid root part position
+local function getHRP(character)
+	if character and character:FindFirstChild("HumanoidRootPart") then
+		return character.HumanoidRootPart
+	end
+	return nil
+end
+
+-- Helper: get distance from local player to a position
+local function getDistanceFromPlayer(position)
+	local myChar = LocalPlayer.Character
+	if myChar and myChar:FindFirstChild("HumanoidRootPart") then
+		return (myChar.HumanoidRootPart.Position - position).Magnitude
+	end
+	return math.huge
+end
+
+-- Helper: format distance string
+local function formatDistance(magnitude)
+	return math.floor(magnitude) .. "m"
+end
+
+-- ============================================================
+-- Drawing ESP (2D Billboard / Screen Labels)
+-- ============================================================
+local DrawingLabels = {}
+
+local function clearDrawingLabels(category)
+	if DrawingLabels[category] then
+		for _, lbl in ipairs(DrawingLabels[category]) do
+			if lbl then
+				pcall(function() lbl:Remove() end)
+			end
+		end
+		DrawingLabels[category] = {}
+	end
+end
+
+local function clearAllDrawingLabels()
+	for cat in pairs(DrawingLabels) do
+		clearDrawingLabels(cat)
+	end
+end
+
+local function createDrawingLabel(part, text, color)
+	if not part or not Drawing then return nil end
+	local label = Drawing.new("Text")
+	label.Text = text
+	label.Color = color
+	label.Size = 13
+	label.Center = true
+	label.Outline = true
+	label.OutlineColor = Color3.new(0, 0, 0)
+	label.Position = Vector2.new(0, 0)
+	label.Visible = false
+	return label
+end
+
+-- ============================================================
+-- ESP Update Loop (RenderStepped)
+-- ============================================================
+local function findGameObjects()
+	local killers = {}
+	local survivors = {}
+	local generators = {}
+	local gates = {}
+	local hooks = {}
+	local pallets = {}
+
+	-- Find killer and survivor characters
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer and player.Character then
+			local char = player.Character
+			-- Attempt to detect killer vs survivor via character attributes, tags, or names
+			local isKiller = false
+
+			-- Method 1: Check for "Killer" attribute/tag
+			if char:FindFirstChild("Killer") or char:GetAttribute("IsKiller") then
+				isKiller = true
+			end
+
+			-- Method 2: Check character name pattern
+			if not isKiller then
+				local charName = string.lower(char.Name)
+				if charName:find("killer") or charName:find("slasher") then
+					isKiller = true
+				end
+			end
+
+			-- Method 3: Check humanoid role value
+			if not isKiller and char:FindFirstChild("Humanoid") then
+				local role = char.Humanoid:GetAttribute("Role")
+				if role and (role == "Killer" or role == "Slayer") then
+					isKiller = true
+				end
+			end
+
+			-- Method 4: Check backpack / tools for killer-specific items
+			if not isKiller then
+				local backpack = player:FindFirstChild("Backpack")
+				if backpack then
+					for _, tool in ipairs(backpack:GetChildren()) do
+						if tool:IsA("Tool") then
+							local toolName = string.lower(tool.Name)
+							if toolName:find("weapon") or toolName:find("knife") or toolName:find("blade") then
+								isKiller = true
+								break
+							end
+						end
+					end
+				end
+			end
+
+			if isKiller then
+				table.insert(killers, char)
+			else
+				table.insert(survivors, char)
+			end
+		end
 	end
 
-	local dataType = type(luau_table)
-
-	if dataType == "table" then
-		if visited[luau_table] then
-			return '"[Circular Reference]"'
-		end
-
-		visited[luau_table] = true
-
-		local isArray = true
-		local maxIndex = 0
-
-		for k, _ in pairs(luau_table) do
-			if type(k) == "number" and k > maxIndex then
-				maxIndex = k
-			end
-			if type(k) ~= "number" or k <= 0 or math.floor(k) ~= k then
-				isArray = false
-				break
-			end
-		end
-
-		local count = 0
-		for _ in pairs(luau_table) do
-			count = count + 1
-		end
-		if count ~= maxIndex and isArray then
-			isArray = false
-		end
-
-		if count == 0 then
-			return "{}"
-		end
-
-		if isArray then
-			if count == 0 then
-				return "[]"
-			end
-
-			local result = "[\n"
-
-			for i = 1, maxIndex do
-				result = result .. nextIndent .. parseJSON(luau_table[i], indent, level + 1, visited)
-				if i < maxIndex then
-					result = result .. ","
+	-- Also check NPCs for killer detection
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("Humanoid") and obj.Parent and obj.Parent:IsA("Model") then
+			local model = obj.Parent
+			if model:FindFirstChild("Killer") or model:GetAttribute("IsKiller") then
+				local alreadyFound = false
+				for _, k in ipairs(killers) do
+					if k == model then
+						alreadyFound = true
+						break
+					end
 				end
-				result = result .. "\n"
+				if not alreadyFound then
+					table.insert(killers, model)
+				end
+			end
+		end
+	end
+
+	-- Find generators, gates, hooks, pallets in workspace
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("Model") then
+			local name = string.lower(obj.Name)
+
+			-- Generators
+			if name:find("generator") or name:find("gen") or obj:GetAttribute("IsGenerator") then
+				table.insert(generators, obj)
 			end
 
-			result = result .. currentIndent .. "]"
-			return result
-		else
-			local result = "{\n"
-			local first = true
-
-			local keys = {}
-			for k in pairs(luau_table) do
-				table.insert(keys, k)
+			-- Gates / Exit Gates
+			if name:find("gate") or name:find("exit") or name:find("door") or obj:GetAttribute("IsGate") then
+				table.insert(gates, obj)
 			end
-			table.sort(keys, function(a, b)
-				if type(a) == type(b) then
-					return tostring(a) < tostring(b)
-				else
-					return type(a) < type(b)
+
+			-- Hooks
+			if name:find("hook") or obj:GetAttribute("IsHook") then
+				table.insert(hooks, obj)
+			end
+
+			-- Pallets
+			if name:find("pallet") or obj:GetAttribute("IsPallet") then
+				table.insert(pallets, obj)
+			end
+		end
+	end
+
+	-- Also scan folders that may contain game objects
+	local scanFolders = {
+		workspace:FindFirstChild("Map"),
+		workspace:FindFirstChild("GameMap"),
+		workspace:FindFirstChild("Arena"),
+	}
+	for _, folder in ipairs(scanFolders) do
+		if folder then
+			for _, obj in ipairs(folder:GetDescendants()) do
+				if obj:IsA("Model") then
+					local name = string.lower(obj.Name)
+					if name:find("generator") or name:find("gen") or obj:GetAttribute("IsGenerator") then
+						local dup = false
+						for _, g in ipairs(generators) do if g == obj then dup = true; break end end
+						if not dup then table.insert(generators, obj) end
+					end
+					if name:find("gate") or name:find("exit") or obj:GetAttribute("IsGate") then
+						local dup = false
+						for _, g in ipairs(gates) do if g == obj then dup = true; break end end
+						if not dup then table.insert(gates, obj) end
+					end
+					if name:find("hook") or obj:GetAttribute("IsHook") then
+						local dup = false
+						for _, h in ipairs(hooks) do if h == obj then dup = true; break end end
+						if not dup then table.insert(hooks, obj) end
+					end
+					if name:find("pallet") or obj:GetAttribute("IsPallet") then
+						local dup = false
+						for _, p in ipairs(pallets) do if p == obj then dup = true; break end end
+						if not dup then table.insert(pallets, obj) end
+					end
+				end
+			end
+		end
+	end
+
+	return killers, survivors, generators, gates, hooks, pallets
+end
+
+local espConnection = nil
+
+local function updateESP()
+	if espConnection then
+		espConnection:Disconnect()
+		espConnection = nil
+	end
+
+	espConnection = RunService.RenderStepped:Connect(function()
+		local killers, survivors, generators, gates, hooks, pallets = findGameObjects()
+
+		-- Killer ESP (Red)
+		clearESP("Killer")
+		if ESPConfig.KillerESP then
+			for _, killer in ipairs(killers) do
+				local hl = createHighlight(killer, Red, ESPConfig.CustomTransparency, "Killer")
+				if hl then
+					table.insert(ESPObjects["Killer"] or {}, hl)
+				end
+			end
+		end
+
+		-- Survivor ESP (Green)
+		clearESP("Survivor")
+		if ESPConfig.SurvivorESP then
+			for _, survivor in ipairs(survivors) do
+				local hl = createHighlight(survivor, Green, ESPConfig.CustomTransparency, "Survivor")
+				if hl then
+					table.insert(ESPObjects["Survivor"] or {}, hl)
+				end
+			end
+		end
+
+		-- Generator ESP (Orange)
+		clearESP("Generator")
+		if ESPConfig.GeneratorESP then
+			for _, gen in ipairs(generators) do
+				local hl = createHighlight(gen, Orange, ESPConfig.CustomTransparency, "Generator")
+				if hl then
+					table.insert(ESPObjects["Generator"] or {}, hl)
+				end
+			end
+		end
+
+		-- Gate ESP (White)
+		clearESP("Gate")
+		if ESPConfig.GateESP then
+			for _, gate in ipairs(gates) do
+				local hl = createHighlight(gate, White, ESPConfig.CustomTransparency, "Gate")
+				if hl then
+					table.insert(ESPObjects["Gate"] or {}, hl)
+				end
+			end
+		end
+
+		-- Hook ESP (Red) with closest-only option
+		clearESP("Hook")
+		if ESPConfig.HookESP then
+			local hooksToShow = hooks
+			if ESPConfig.ShowOnlyClosestHook then
+				local myHRP = getHRP(LocalPlayer.Character)
+				if myHRP then
+					local closestHook = nil
+					local closestDist = math.huge
+					for _, hook in ipairs(hooks) do
+						local hrp = getHRP(hook) or hook.PrimaryPart
+						if hrp then
+							local dist = (myHRP.Position - hrp.Position).Magnitude
+							if dist < closestDist then
+								closestDist = dist
+								closestHook = hook
+							end
+						end
+					end
+					hooksToShow = closestHook and { closestHook } or {}
+				end
+			end
+			for _, hook in ipairs(hooksToShow) do
+				local hl = createHighlight(hook, Red, ESPConfig.CustomTransparency, "Hook")
+				if hl then
+					table.insert(ESPObjects["Hook"] or {}, hl)
+				end
+			end
+		end
+
+		-- Pallet ESP (Yellow)
+		clearESP("Pallet")
+		if ESPConfig.PalletESP then
+			for _, pallet in ipairs(pallets) do
+				local hl = createHighlight(pallet, Yellow, ESPConfig.CustomTransparency, "Pallet")
+				if hl then
+					table.insert(ESPObjects["Pallet"] or {}, hl)
+				end
+			end
+		end
+	end)
+end
+
+-- Start ESP loop
+updateESP()
+
+-- ============================================================
+-- Teleport System
+-- ============================================================
+local function teleportTo(position)
+	local char = LocalPlayer.Character
+	if char and char:FindFirstChild("HumanoidRootPart") then
+		char.HumanoidRootPart.CFrame = CFrame.new(position)
+	end
+end
+
+local function teleportToNearest(objectList)
+	local myHRP = getHRP(LocalPlayer.Character)
+	if not myHRP then return end
+	local nearest = nil
+	local nearestDist = math.huge
+	for _, obj in ipairs(objectList) do
+		local hrp = getHRP(obj) or obj.PrimaryPart
+		if hrp then
+			local dist = (myHRP.Position - hrp.Position).Magnitude
+			if dist < nearestDist then
+				nearestDist = dist
+				nearest = hrp
+			end
+		end
+	end
+	if nearest then
+		teleportTo(nearest.Position + Vector3.new(0, 3, 0))
+	end
+end
+
+local function getAllTeleportLocations()
+	local locations = {}
+	local myHRP = getHRP(LocalPlayer.Character)
+
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("Model") then
+			local name = string.lower(obj.Name)
+			local hrp = getHRP(obj) or obj.PrimaryPart
+			if hrp then
+				if name:find("generator") or name:find("gen") or obj:GetAttribute("IsGenerator") then
+					table.insert(locations, { Name = obj.Name, Type = "Generator", Position = hrp.Position })
+				elseif name:find("gate") or name:find("exit") or name:GetAttribute("IsGate") then
+					table.insert(locations, { Name = obj.Name, Type = "Gate", Position = hrp.Position })
+				elseif name:find("hook") or obj:GetAttribute("IsHook") then
+					table.insert(locations, { Name = obj.Name, Type = "Hook", Position = hrp.Position })
+				elseif name:find("pallet") or obj:GetAttribute("IsPallet") then
+					table.insert(locations, { Name = obj.Name, Type = "Pallet", Position = hrp.Position })
+				end
+			end
+		end
+	end
+
+	-- Also add player positions
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer and player.Character then
+			local hrp = getHRP(player.Character)
+			if hrp then
+				table.insert(locations, { Name = player.Name, Type = "Player", Position = hrp.Position })
+			end
+		end
+	end
+
+	return locations
+end
+
+-- ============================================================
+-- Gameplay Tools State
+-- ============================================================
+local GameplayState = {
+	NoStun = false,
+	InstantVault = false,
+	AutoSkillCheck = false,
+	AntiCamp = false,
+	SpamVault = false,
+	WalkSpeedBoost = false,
+	CustomWalkSpeed = 20,
+	JumpPowerBoost = false,
+	CustomJumpPower = 70,
+	Freecam = false,
+	NoClip = false,
+	InfiniteSprint = false,
+}
+
+-- Walk Speed
+local walkSpeedConn = nil
+local function applyWalkSpeed()
+	if walkSpeedConn then walkSpeedConn:Disconnect() end
+	if GameplayState.WalkSpeedBoost then
+		walkSpeedConn = RunService.Heartbeat:Connect(function()
+			local char = LocalPlayer.Character
+			if char and char:FindFirstChild("Humanoid") then
+				char.Humanoid.WalkSpeed = GameplayState.CustomWalkSpeed
+			end
+		end)
+	end
+end
+
+-- Jump Power
+local jumpPowerConn = nil
+local function applyJumpPower()
+	if jumpPowerConn then jumpPowerConn:Disconnect() end
+	if GameplayState.JumpPowerBoost then
+		jumpPowerConn = RunService.Heartbeat:Connect(function()
+			local char = LocalPlayer.Character
+			if char and char:FindFirstChild("Humanoid") then
+				char.Humanoid.JumpPower = GameplayState.CustomJumpPower
+			end
+		end)
+	end
+end
+
+-- NoClip
+local noclipConn = nil
+local function applyNoClip()
+	if noclipConn then noclipConn:Disconnect() end
+	if GameplayState.NoClip then
+		noclipConn = RunService.Stepped:Connect(function()
+			local char = LocalPlayer.Character
+			if char then
+				for _, part in ipairs(char:GetDescendants()) do
+					if part:IsA("BasePart") then
+						part.CanCollide = false
+					end
+				end
+			end
+		end)
+	end
+end
+
+-- Infinite Sprint
+local sprintConn = nil
+local function applyInfiniteSprint()
+	if sprintConn then sprintConn:Disconnect() end
+	if GameplayState.InfiniteSprint then
+		sprintConn = RunService.Heartbeat:Connect(function()
+			local char = LocalPlayer.Character
+			if char and char:FindFirstChild("Humanoid") then
+				-- Keep stamina / energy at max
+				local humanoid = char.Humanoid
+				if humanoid:GetAttribute("Stamina") ~= nil then
+					humanoid:SetAttribute("Stamina", 100)
+				end
+				if humanoid:GetAttribute("Energy") ~= nil then
+					humanoid:SetAttribute("Energy", 100)
+				end
+			end
+		end)
+	end
+end
+
+-- Freecam
+local freecamConn = nil
+local freecamActive = false
+local freecamSpeed = 1
+local freecamBody = nil
+
+local function toggleFreecam()
+	GameplayState.Freecam = not GameplayState.Freecam
+
+	if GameplayState.Freecam then
+		local char = LocalPlayer.Character
+		if char then
+			freecamBody = Instance.new("BodyVelocity")
+			freecamBody.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+			freecamBody.Velocity = Vector3.new(0, 0, 0)
+			freecamBody.Parent = char:FindFirstChild("HumanoidRootPart")
+
+			local gyro = Instance.new("BodyGyro")
+			gyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+			gyro.P = 9e4
+			gyro.Parent = char:FindFirstChild("HumanoidRootPart")
+
+			freecamConn = RunService.RenderStepped:Connect(function()
+				local camCF = Camera.CFrame
+				local moveDir = Vector3.new(0, 0, 0)
+
+				if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+					moveDir = moveDir + camCF.LookVector
+				end
+				if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+					moveDir = moveDir - camCF.LookVector
+				end
+				if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+					moveDir = moveDir - camCF.RightVector
+				end
+				if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+					moveDir = moveDir + camCF.RightVector
+				end
+				if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+					moveDir = moveDir + Vector3.new(0, 1, 0)
+				end
+				if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+					moveDir = moveDir - Vector3.new(0, 1, 0)
+				end
+
+				if moveDir.Magnitude > 0 then
+					moveDir = moveDir.Unit
+				end
+
+				if freecamBody then
+					freecamBody.Velocity = moveDir * 50 * freecamSpeed
+				end
+
+				-- Camera follows character loosely
+				local hrp = getHRP(char)
+				if hrp then
+					Camera.CFrame = CFrame.new(Camera.CFrame.Position, hrp.Position)
 				end
 			end)
 
-			for _, k in ipairs(keys) do
-				local v = luau_table[k]
-				if not first then
-					result = result .. ",\n"
-				else
-					first = false
-				end
-
-				if type(k) == "string" then
-					result = result .. nextIndent .. '"' .. k .. '": '
-				else
-					result = result .. nextIndent .. '"' .. tostring(k) .. '": '
-				end
-
-				result = result .. parseJSON(v, indent, level + 1, visited)
-			end
-
-			result = result .. "\n" .. currentIndent .. "}"
-			return result
+			WindUI:Notify({
+				Title = "Freecam",
+				Content = "Freecam enabled! WASD to move, Space/Shift for up/down.",
+			})
 		end
-	elseif dataType == "string" then
-		local escaped = luau_table:gsub("\\", "\\\\")
-		escaped = escaped:gsub('"', '\\"')
-		escaped = escaped:gsub("\n", "\\n")
-		escaped = escaped:gsub("\r", "\\r")
-		escaped = escaped:gsub("\t", "\\t")
-
-		return '"' .. escaped .. '"'
-	elseif dataType == "number" then
-		return tostring(luau_table)
-	elseif dataType == "boolean" then
-		return luau_table and "true" or "false"
-	elseif dataType == "function" then
-		return '"function"'
 	else
-		return '"' .. dataType .. '"'
+		if freecamConn then
+			freecamConn:Disconnect()
+			freecamConn = nil
+		end
+		if freecamBody and freecamBody.Parent then
+			freecamBody:Destroy()
+			freecamBody = nil
+		end
+		local char = LocalPlayer.Character
+		if char then
+			local hrp = char:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				for _, child in ipairs(hrp:GetChildren()) do
+					if child:IsA("BodyGyro") or child:IsA("BodyVelocity") then
+						child:Destroy()
+					end
+				end
+			end
+		end
+
+		WindUI:Notify({
+			Title = "Freecam",
+			Content = "Freecam disabled!",
+		})
 	end
 end
 
-local function tableToClipboard(luau_table, indent)
-	indent = indent or 4
-	local jsonString = parseJSON(luau_table, indent)
-	setclipboard(jsonString)
-	return jsonString
+-- ============================================================
+-- TABS
+-- ============================================================
+
+-- ============================================================
+-- ESP Tab
+-- ============================================================
+local ESPTab = Window:Tab({
+	Title = "ESP",
+	Icon = "solar:eye-bold",
+	IconColor = Red,
+	IconShape = "Square",
+	Border = true,
+})
+
+do
+	local MainSection = ESPTab:Section({
+		Title = "Entity ESP",
+	})
+
+	MainSection:Toggle({
+		Title = "Killer ESP",
+		Desc = "Menampilkan posisi killer dengan highlight warna merah",
+		Flag = "KillerESP",
+		Value = false,
+		Callback = function(v)
+			ESPConfig.KillerESP = v
+		end,
+	})
+
+	MainSection:Space()
+
+	MainSection:Toggle({
+		Title = "Survivor ESP",
+		Desc = "Menampilkan posisi survivor dengan highlight warna hijau",
+		Flag = "SurvivorESP",
+		Value = false,
+		Callback = function(v)
+			ESPConfig.SurvivorESP = v
+		end,
+	})
+
+	ESPTab:Space({ Columns = 2 })
+
+	local MapSection = ESPTab:Section({
+		Title = "Map ESP",
+	})
+
+	MapSection:Toggle({
+		Title = "Generator ESP",
+		Desc = "Menunjukkan lokasi generator yang tersedia di map",
+		Flag = "GeneratorESP",
+		Value = false,
+		Callback = function(v)
+			ESPConfig.GeneratorESP = v
+		end,
+	})
+
+	MapSection:Space()
+
+	MapSection:Toggle({
+		Title = "Gate ESP",
+		Desc = "Menampilkan posisi gate atau pintu keluar",
+		Flag = "GateESP",
+		Value = false,
+		Callback = function(v)
+			ESPConfig.GateESP = v
+		end,
+	})
+
+	MapSection:Space()
+
+	MapSection:Toggle({
+		Title = "Hook ESP",
+		Desc = "Menampilkan lokasi hook di area permainan",
+		Flag = "HookESP",
+		Value = false,
+		Callback = function(v)
+			ESPConfig.HookESP = v
+		end,
+	})
+
+	MapSection:Space()
+
+	MapSection:Toggle({
+		Title = "Show Only Closest Hook",
+		Desc = "Hanya menampilkan hook yang paling dekat dengan posisi player",
+		Flag = "ShowOnlyClosestHook",
+		Value = false,
+		Callback = function(v)
+			ESPConfig.ShowOnlyClosestHook = v
+		end,
+	})
+
+	MapSection:Space()
+
+	MapSection:Toggle({
+		Title = "Pallet ESP",
+		Desc = "Menunjukkan posisi pallet yang ada di map",
+		Flag = "PalletESP",
+		Value = false,
+		Callback = function(v)
+			ESPConfig.PalletESP = v
+		end,
+	})
+
+	ESPTab:Space({ Columns = 2 })
+
+	local SettingsSection = ESPTab:Section({
+		Title = "ESP Settings",
+	})
+
+	SettingsSection:Slider({
+		Title = "ESP Transparency",
+		Desc = "Atur tingkat transparansi highlight ESP",
+		Flag = "ESPTransparency",
+		Step = 0.05,
+		Value = {
+			Min = 0.1,
+			Max = 1.0,
+			Default = 0.5,
+		},
+		Callback = function(value)
+			ESPConfig.CustomTransparency = value
+		end,
+	})
+
+	SettingsSection:Space()
+
+	SettingsSection:Button({
+		Title = "Clear All ESP",
+		Desc = "Menghapus semua highlight ESP yang aktif",
+		Color = Color3.fromHex("#ff4830"),
+		Icon = "shredder",
+		Callback = function()
+			ESPConfig.KillerESP = false
+			ESPConfig.SurvivorESP = false
+			ESPConfig.GeneratorESP = false
+			ESPConfig.GateESP = false
+			ESPConfig.HookESP = false
+			ESPConfig.PalletESP = false
+			ESPConfig.ShowOnlyClosestHook = false
+			clearAllESP()
+			WindUI:Notify({
+				Title = "ESP",
+				Content = "Semua ESP telah dimatikan!",
+			})
+		end,
+	})
 end
 
--- */  About Tab  /* --
+-- ============================================================
+-- Teleport Tab
+-- ============================================================
+local TeleportTab = Window:Tab({
+	Title = "Teleport",
+	Icon = "solar:map-point-bold",
+	IconColor = Blue,
+	IconShape = "Square",
+	Border = true,
+})
+
 do
-	local AboutTab = Window:Tab({
-		Title = "About WindUI",
-		Desc = "Description Example",
+	local QuickSection = TeleportTab:Section({
+		Title = "Quick Teleport",
+	})
+
+	QuickSection:Button({
+		Title = "Teleport to Nearest Generator",
+		Desc = "Teleport ke generator terdekat",
+		Icon = "zap",
+		Callback = function()
+			local _, _, generators, _, _, _ = findGameObjects()
+			if #generators > 0 then
+				teleportToNearest(generators)
+				WindUI:Notify({ Title = "Teleport", Content = "Teleported ke generator terdekat!" })
+			else
+				WindUI:Notify({ Title = "Teleport", Content = "Tidak ada generator ditemukan!" })
+			end
+		end,
+	})
+
+	QuickSection:Space()
+
+	QuickSection:Button({
+		Title = "Teleport to Nearest Gate",
+		Desc = "Teleport ke gate/pintu keluar terdekat",
+		Icon = "door-open",
+		Callback = function()
+			local _, _, _, gates, _, _ = findGameObjects()
+			if #gates > 0 then
+				teleportToNearest(gates)
+				WindUI:Notify({ Title = "Teleport", Content = "Teleported ke gate terdekat!" })
+			else
+				WindUI:Notify({ Title = "Teleport", Content = "Tidak ada gate ditemukan!" })
+			end
+		end,
+	})
+
+	QuickSection:Space()
+
+	QuickSection:Button({
+		Title = "Teleport to Nearest Hook",
+		Desc = "Teleport ke hook terdekat",
+		Icon = "anchor",
+		Callback = function()
+			local _, _, _, _, hooks, _ = findGameObjects()
+			if #hooks > 0 then
+				teleportToNearest(hooks)
+				WindUI:Notify({ Title = "Teleport", Content = "Teleported ke hook terdekat!" })
+			else
+				WindUI:Notify({ Title = "Teleport", Content = "Tidak ada hook ditemukan!" })
+			end
+		end,
+	})
+
+	QuickSection:Space()
+
+	QuickSection:Button({
+		Title = "Teleport to Nearest Pallet",
+		Desc = "Teleport ke pallet terdekat",
+		Icon = "box",
+		Callback = function()
+			local _, _, _, _, _, pallets = findGameObjects()
+			if #pallets > 0 then
+				teleportToNearest(pallets)
+				WindUI:Notify({ Title = "Teleport", Content = "Teleported ke pallet terdekat!" })
+			else
+				WindUI:Notify({ Title = "Teleport", Content = "Tidak ada pallet ditemukan!" })
+			end
+		end,
+	})
+
+	TeleportTab:Space({ Columns = 2 })
+
+	local PlayerTPSection = TeleportTab:Section({
+		Title = "Teleport to Player",
+	})
+
+	-- Build player list dynamically
+	local playerNames = {}
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			table.insert(playerNames, player.Name)
+		end
+	end
+
+	PlayerTPSection:Dropdown({
+		Title = "Select Player",
+		Values = playerNames,
+		Value = #playerNames > 0 and playerNames[1] or nil,
+		Callback = function(selectedPlayer)
+			local targetPlayer = Players:FindFirstChild(selectedPlayer)
+			if targetPlayer and targetPlayer.Character then
+				local hrp = getHRP(targetPlayer.Character)
+				if hrp then
+					teleportTo(hrp.Position + Vector3.new(0, 3, 0))
+					WindUI:Notify({
+						Title = "Teleport",
+						Content = "Teleported ke " .. selectedPlayer .. "!",
+					})
+				end
+			else
+				WindUI:Notify({
+					Title = "Teleport",
+					Content = "Player tidak ditemukan!",
+				})
+			end
+		end,
+	})
+
+	TeleportTab:Space({ Columns = 2 })
+
+	local CoordSection = TeleportTab:Section({
+		Title = "Coordinate Teleport",
+	})
+
+	local coordXInput = CoordSection:Input({
+		Title = "X Coordinate",
+		Placeholder = "0",
+		Type = "Input",
+		Callback = function() end,
+	})
+
+	local coordYInput = CoordSection:Input({
+		Title = "Y Coordinate",
+		Placeholder = "50",
+		Type = "Input",
+		Callback = function() end,
+	})
+
+	local coordZInput = CoordSection:Input({
+		Title = "Z Coordinate",
+		Placeholder = "0",
+		Type = "Input",
+		Callback = function() end,
+	})
+
+	CoordSection:Space()
+
+	CoordSection:Button({
+		Title = "Teleport to Coordinates",
+		Desc = "Teleport ke koordinat yang ditentukan",
+		Color = Blue,
+		Icon = "map-pin",
+		Callback = function()
+			local x = tonumber(coordXInput:Get() or "0") or 0
+			local y = tonumber(coordYInput:Get() or "50") or 50
+			local z = tonumber(coordZInput:Get() or "0") or 0
+			teleportTo(Vector3.new(x, y, z))
+			WindUI:Notify({
+				Title = "Teleport",
+				Content = string.format("Teleported ke (%.1f, %.1f, %.1f)", x, y, z),
+			})
+		end,
+	})
+
+	TeleportTab:Space({ Columns = 2 })
+
+	local SaveSection = TeleportTab:Section({
+		Title = "Saved Locations",
+	})
+
+	local savedLocations = {}
+
+	SaveSection:Button({
+		Title = "Save Current Position",
+		Desc = "Simpan posisi player saat ini",
+		Icon = "bookmark",
+		Callback = function()
+			local hrp = getHRP(LocalPlayer.Character)
+			if hrp then
+				local pos = hrp.Position
+				local locName = "Location_" .. #savedLocations + 1
+				table.insert(savedLocations, { Name = locName, Position = pos })
+				WindUI:Notify({
+					Title = "Save Location",
+					Content = string.format("Posisi disimpan: %s (%.1f, %.1f, %.1f)", locName, pos.X, pos.Y, pos.Z),
+				})
+			end
+		end,
+	})
+
+	SaveSection:Space()
+
+	SaveSection:Button({
+		Title = "Teleport to Last Saved",
+		Desc = "Teleport ke lokasi terakhir yang disimpan",
+		Icon = "rotate-ccw",
+		Callback = function()
+			if #savedLocations > 0 then
+				local lastLoc = savedLocations[#savedLocations]
+				teleportTo(lastLoc.Position)
+				WindUI:Notify({
+					Title = "Teleport",
+					Content = "Teleported ke " .. lastLoc.Name .. "!",
+				})
+			else
+				WindUI:Notify({
+					Title = "Teleport",
+					Content = "Belum ada lokasi yang disimpan!",
+				})
+			end
+		end,
+	})
+end
+
+-- ============================================================
+-- Gameplay Tab
+-- ============================================================
+local GameplayTab = Window:Tab({
+	Title = "Gameplay",
+	Icon = "solar:gamepad-bold",
+	IconColor = Green,
+	IconShape = "Square",
+	Border = true,
+})
+
+do
+	local MovementSection = GameplayTab:Section({
+		Title = "Movement",
+	})
+
+	MovementSection:Toggle({
+		Title = "Walk Speed Boost",
+		Desc = "Meningkatkan kecepatan jalan player",
+		Flag = "WalkSpeedBoost",
+		Value = false,
+		Callback = function(v)
+			GameplayState.WalkSpeedBoost = v
+			if not v and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+				LocalPlayer.Character.Humanoid.WalkSpeed = 16
+			end
+			applyWalkSpeed()
+		end,
+	})
+
+	MovementSection:Space()
+
+	MovementSection:Slider({
+		Title = "Walk Speed",
+		Flag = "CustomWalkSpeed",
+		Step = 1,
+		Value = {
+			Min = 16,
+			Max = 200,
+			Default = 40,
+		},
+		Callback = function(value)
+			GameplayState.CustomWalkSpeed = value
+			if GameplayState.WalkSpeedBoost then
+				applyWalkSpeed()
+			end
+		end,
+	})
+
+	MovementSection:Space()
+
+	MovementSection:Toggle({
+		Title = "Jump Power Boost",
+		Desc = "Meningkatkan ketinggian lompatan player",
+		Flag = "JumpPowerBoost",
+		Value = false,
+		Callback = function(v)
+			GameplayState.JumpPowerBoost = v
+			if not v and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+				LocalPlayer.Character.Humanoid.JumpPower = 50
+			end
+			applyJumpPower()
+		end,
+	})
+
+	MovementSection:Space()
+
+	MovementSection:Slider({
+		Title = "Jump Power",
+		Flag = "CustomJumpPower",
+		Step = 5,
+		Value = {
+			Min = 50,
+			Max = 300,
+			Default = 100,
+		},
+		Callback = function(value)
+			GameplayState.CustomJumpPower = value
+			if GameplayState.JumpPowerBoost then
+				applyJumpPower()
+			end
+		end,
+	})
+
+	MovementSection:Space()
+
+	MovementSection:Toggle({
+		Title = "NoClip",
+		Desc = "Menembus dinding dan objek padat",
+		Flag = "NoClip",
+		Value = false,
+		Callback = function(v)
+			GameplayState.NoClip = v
+			applyNoClip()
+		end,
+	})
+
+	MovementSection:Space()
+
+	MovementSection:Toggle({
+		Title = "Infinite Sprint",
+		Desc = "Berlari tanpa batas stamina",
+		Flag = "InfiniteSprint",
+		Value = false,
+		Callback = function(v)
+			GameplayState.InfiniteSprint = v
+			applyInfiniteSprint()
+		end,
+	})
+
+	GameplayTab:Space({ Columns = 2 })
+
+	local UtilitySection = GameplayTab:Section({
+		Title = "Utility",
+	})
+
+	UtilitySection:Toggle({
+		Title = "Freecam",
+		Desc = "Kamera bebas terbang melihat seluruh map. WASD untuk bergerak, Space/Shift naik/turun",
+		Flag = "Freecam",
+		Value = false,
+		Callback = function(v)
+			toggleFreecam()
+		end,
+	})
+
+	UtilitySection:Space()
+
+	UtilitySection:Toggle({
+		Title = "No Stun",
+		Desc = "Menghilangkan efek stun saat dikejar killer",
+		Flag = "NoStun",
+		Value = false,
+		Callback = function(v)
+			GameplayState.NoStun = v
+			if v then
+				WindUI:Notify({ Title = "Gameplay", Content = "No Stun enabled!" })
+			end
+		end,
+	})
+
+	UtilitySection:Space()
+
+	UtilitySection:Toggle({
+		Title = "Instant Vault",
+		Desc = "Vault instan tanpa animasi panjang",
+		Flag = "InstantVault",
+		Value = false,
+		Callback = function(v)
+			GameplayState.InstantVault = v
+			if v then
+				WindUI:Notify({ Title = "Gameplay", Content = "Instant Vault enabled!" })
+			end
+		end,
+	})
+
+	UtilitySection:Space()
+
+	UtilitySection:Toggle({
+		Title = "Auto Skill Check",
+		Desc = "Otomatis menyelesaikan skill check",
+		Flag = "AutoSkillCheck",
+		Value = false,
+		Callback = function(v)
+			GameplayState.AutoSkillCheck = v
+			if v then
+				WindUI:Notify({ Title = "Gameplay", Content = "Auto Skill Check enabled!" })
+			end
+		end,
+	})
+
+	UtilitySection:Space()
+
+	UtilitySection:Toggle({
+		Title = "Anti Camp Alert",
+		Desc = "Memberikan peringatan jika killer berada terlalu lama di sekitar hook",
+		Flag = "AntiCamp",
+		Value = false,
+		Callback = function(v)
+			GameplayState.AntiCamp = v
+			if v then
+				WindUI:Notify({ Title = "Gameplay", Content = "Anti Camp Alert enabled!" })
+			end
+		end,
+	})
+
+	UtilitySection:Space()
+
+	UtilitySection:Toggle({
+		Title = "Spam Vault",
+		Desc = "Memungkinkan vault berulang kali tanpa cooldown",
+		Flag = "SpamVault",
+		Value = false,
+		Callback = function(v)
+			GameplayState.SpamVault = v
+			if v then
+				WindUI:Notify({ Title = "Gameplay", Content = "Spam Vault enabled!" })
+			end
+		end,
+	})
+
+	GameplayTab:Space({ Columns = 2 })
+
+	local FreecamSection = GameplayTab:Section({
+		Title = "Freecam Settings",
+	})
+
+	FreecamSection:Slider({
+		Title = "Freecam Speed",
+		Flag = "FreecamSpeed",
+		Step = 0.5,
+		Value = {
+			Min = 0.5,
+			Max = 10,
+			Default = 1,
+		},
+		Callback = function(value)
+			freecamSpeed = value
+		end,
+	})
+end
+
+-- ============================================================
+-- Info Tab (About)
+-- ============================================================
+do
+	local InfoTab = Window:Tab({
+		Title = "Info",
 		Icon = "solar:info-square-bold",
 		IconColor = Grey,
 		IconShape = "Square",
 		Border = true,
 	})
 
-	local AboutSection = AboutTab:Section({
-		Title = "About WindUI",
-	})
-
-	AboutSection:Image({
-		Image = "https://repository-images.githubusercontent.com/880118829/22c020eb-d1b1-4b34-ac4d-e33fd88db38d",
-		AspectRatio = "16:9",
-		Radius = 9,
-	})
-
-	AboutSection:Space({ Columns = 3 })
-
-	AboutSection:Section({
-		Title = "What is WindUI?",
-		TextSize = 24,
+	InfoTab:Section({
+		Title = "Zetttify | Violence District VFree",
+		TextSize = 22,
 		FontWeight = Enum.FontWeight.SemiBold,
 	})
 
-	AboutSection:Space()
+	InfoTab:Space()
 
-	AboutSection:Section({
-		Title = "WindUI is a stylish, open-source UI (User Interface) library specifically designed for Roblox Script Hubs.\nDeveloped by Footagesus (.ftgs, Footages).\nIt aims to provide developers with a modern, customizable, and easy-to-use toolkit for creating visually appealing interfaces within Roblox.\nThe project is primarily written in Lua (Luau), the scripting language used in Roblox.",
-		TextSize = 18,
-		TextTransparency = 0.35,
+	InfoTab:Section({
+		Title = "Script ini menyediakan berbagai fitur ESP dan gameplay tools untuk membantu pemain mendapatkan informasi map dengan lebih jelas selama permainan Violence District berlangsung.\n\nFitur utama meliputi ESP untuk Killer (Merah), Survivor (Hijau), Generator (Orange), Gate (Putih), Hook (Merah), dan Pallet (Kuning). Selain itu terdapat Teleport Menu untuk berpindah lokasi secara cepat, serta Gameplay Tools seperti Walk Speed Boost, NoClip, Freecam, dan lainnya.\n\nGunakan fitur dengan bijak. Script ini hanya untuk tujuan edukasi.",
+		TextSize = 16,
+		TextTransparency = 0.25,
 		FontWeight = Enum.FontWeight.Medium,
 	})
 
-	AboutTab:Space({ Columns = 4 })
+	InfoTab:Space({ Columns = 3 })
 
-	-- Default buttons
-
-	AboutTab:Button({
-		Title = "Export WindUI JSON (copy)",
-		Color = Color3.fromHex("#a2ff30"),
-		Justify = "Center",
-		IconAlign = "Left",
-		Icon = "", -- removing icon
-		Callback = function()
-			tableToClipboard(WindUI)
-			WindUI:Notify({
-				Title = "WindUI JSON",
-				Content = "Copied to Clipboard!",
-			})
-		end,
+	local CreditsSection = InfoTab:Section({
+		Title = "Credits",
 	})
-	AboutTab:Space({ Columns = 1 })
 
-	AboutTab:Button({
+	CreditsSection:Section({
+		Title = "UI Library: WindUI by Footagesus\nScript: Zetttify\nGame: Violence District",
+		TextSize = 15,
+		TextTransparency = 0.3,
+	})
+
+	InfoTab:Space()
+
+	InfoTab:Button({
 		Title = "Destroy Window",
+		Desc = "Menutup dan menghapus seluruh UI",
 		Color = Color3.fromHex("#ff4830"),
-		Justify = "Center",
 		Icon = "shredder",
-		IconAlign = "Left",
 		Callback = function()
+			-- Cleanup all connections
+			if espConnection then espConnection:Disconnect() end
+			if walkSpeedConn then walkSpeedConn:Disconnect() end
+			if jumpPowerConn then jumpPowerConn:Disconnect() end
+			if noclipConn then noclipConn:Disconnect() end
+			if sprintConn then sprintConn:Disconnect() end
+			if freecamConn then freecamConn:Disconnect() end
+			-- Clear all ESP
+			clearAllESP()
+			clearAllDrawingLabels()
 			Window:Destroy()
 		end,
 	})
 end
 
--- */  Elements Section  /* --
-local ElementsSection = Window:Section({
-	Title = "Elements",
-})
-local ConfigUsageSection = Window:Section({
-	Title = "Config Usage",
-})
-local OtherSection = Window:Section({
-	Title = "Other",
-})
-
--- */  Overview Tab  /* --
-do
-	local OverviewTab = ElementsSection:Tab({
-		Title = "Overview",
-		Icon = "solar:home-2-bold",
-		IconColor = Grey,
-		IconShape = "Square",
-		Border = true,
-	})
-
-	local OverviewSection1 = OverviewTab:Section({
-		Title = "Group's Example",
-	})
-
-	local OverviewGroup1 = OverviewTab:Group({})
-
-	OverviewGroup1:Button({
-		Title = "Button 1",
-		Justify = "Center",
-		Icon = "",
-		Callback = function()
-			print("clicked button 1")
-		end,
-	})
-	OverviewGroup1:Space()
-	OverviewGroup1:Button({
-		Title = "Button 2",
-		Justify = "Center",
-		Icon = "",
-		Callback = function()
-			print("clicked button 2")
-		end,
-	})
-
-	OverviewTab:Space()
-
-	local OverviewGroup2 = OverviewTab:Group({})
-
-	OverviewGroup2:Button({
-		Title = "Button 1",
-		Justify = "Center",
-		Icon = "",
-		Callback = function()
-			print("clicked button 1")
-		end,
-	})
-	OverviewGroup2:Space()
-	OverviewGroup2:Toggle({
-		Title = "Toggle 2",
-		Callback = function(v)
-			print("clicked toggle 2:", v)
-		end,
-	})
-	OverviewGroup2:Space()
-	OverviewGroup2:Colorpicker({
-		Title = "Colorpicker 3",
-		Default = Color3.fromHex("#30ff6a"),
-		Callback = function(color)
-			print(color)
-		end,
-	})
-
-	OverviewTab:Space()
-
-	local OverviewGroup3 = OverviewTab:Group({})
-
-	local OverviewSection1 = OverviewGroup3:Section({
-		Title = "Section 1",
-		Desc = "Section exampleee",
-		Box = true,
-		BoxBorder = true,
-		Opened = true,
-	})
-	OverviewSection1:Button({
-		Title = "Button 1",
-		Justify = "Center",
-		Icon = "",
-		Callback = function()
-			print("clicked button 1")
-		end,
-	})
-	OverviewSection1:Space()
-	OverviewSection1:Toggle({
-		Title = "Toggle 2",
-		Callback = function(v)
-			print("clicked toggle 2:", v)
-		end,
-	})
-
-	OverviewGroup3:Space()
-
-	local OverviewSection2 = OverviewGroup3:Section({
-		Title = "Section 2",
-		Box = true,
-		BoxBorder = true,
-		Opened = true,
-	})
-	OverviewSection2:Button({
-		Title = "Button 1",
-		Justify = "Center",
-		Icon = "",
-		Callback = function()
-			print("clicked button 1")
-		end,
-	})
-	OverviewSection2:Space()
-	OverviewSection2:Button({
-		Title = "Button 2",
-		Justify = "Center",
-		Icon = "",
-		Callback = function()
-			print("clicked button 2")
-		end,
-	})
-
-	--OverviewTab:Space()
-end
-
--- */  Toggle Tab  /* --
-do
-	local ToggleTab = ElementsSection:Tab({
-		Title = "Toggle",
-		Icon = "solar:check-square-bold",
-		IconColor = Green,
-		IconShape = "Square",
-		Border = true,
-	})
-
-	ToggleTab:Toggle({
-		Title = "Toggle",
-	})
-
-	ToggleTab:Space()
-
-	ToggleTab:Toggle({
-		Title = "Toggle",
-		Desc = "Toggle example",
-	})
-
-	ToggleTab:Space()
-
-	local ToggleGroup1 = ToggleTab:Group()
-	ToggleGroup1:Toggle({})
-	ToggleGroup1:Space()
-	ToggleGroup1:Toggle({})
-
-	ToggleTab:Space()
-
-	ToggleTab:Toggle({
-		Title = "Checkbox",
-		Type = "Checkbox",
-	})
-
-	ToggleTab:Space()
-
-	ToggleTab:Toggle({
-		Title = "Checkbox",
-		Desc = "Checkbox example",
-		Type = "Checkbox",
-	})
-
-	ToggleTab:Space()
-
-	ToggleTab:Toggle({
-		Title = "Toggle",
-		Locked = true,
-		LockedTitle = "This element is locked",
-	})
-
-	ToggleTab:Toggle({
-		Title = "Toggle",
-		Desc = "Toggle example",
-		Locked = true,
-		LockedTitle = "This element is locked",
-	})
-end
-
--- */  Button Tab  /* --
-do
-	local ButtonTab = ElementsSection:Tab({
-		Title = "Button",
-		Icon = "solar:cursor-square-bold",
-		IconColor = Blue,
-		IconShape = "Square",
-		Border = true,
-	})
-
-	local HighlightButton
-	HighlightButton = ButtonTab:Button({
-		Title = "Highlight Button",
-		Icon = "mouse",
-		Callback = function()
-			print("clicked highlight")
-			HighlightButton:Highlight()
-		end,
-	})
-
-	ButtonTab:Space()
-
-	ButtonTab:Button({
-		Title = "Blue Button",
-		Color = Color3.fromHex("#305dff"),
-		Icon = "",
-		Callback = function() end,
-	})
-
-	ButtonTab:Space()
-
-	ButtonTab:Button({
-		Title = "Blue Button",
-		Desc = "With description",
-		Color = Color3.fromHex("#305dff"),
-		Icon = "",
-		Callback = function() end,
-	})
-
-	ButtonTab:Space()
-
-	ButtonTab:Button({
-		Title = "Notify Button",
-		--Desc = "Button example",
-		Callback = function()
-			WindUI:Notify({
-				Title = "Hello",
-				Content = "Welcome to the WindUI Example!",
-				Icon = "solar:bell-bold",
-				Duration = 5,
-				CanClose = false,
-			})
-		end,
-	})
-
-	ButtonTab:Button({
-		Title = "Notify Button 2",
-		--Desc = "Button example",
-		Callback = function()
-			WindUI:Notify({
-				Title = "Hello",
-				Content = "Welcome to the WindUI Example!",
-				--Icon = "solar:bell-bold",
-				Duration = 5,
-				CanClose = false,
-			})
-		end,
-	})
-
-	ButtonTab:Space()
-
-	ButtonTab:Button({
-		Title = "Button",
-		Locked = true,
-		LockedTitle = "This element is locked",
-	})
-
-	ButtonTab:Button({
-		Title = "Button",
-		Desc = "Button example",
-		Locked = true,
-		LockedTitle = "This element is locked",
-	})
-end
-
--- */  Input Tab  /* --
-do
-	local InputTab = ElementsSection:Tab({
-		Title = "Input",
-		Icon = "solar:password-minimalistic-input-bold",
-		IconColor = Purple,
-		IconShape = "Square",
-		Border = true,
-	})
-
-	InputTab:Input({
-		Title = "Input",
-		Icon = "mouse",
-	})
-
-	InputTab:Space()
-
-	InputTab:Input({
-		Title = "Input Textarea",
-		Type = "Textarea",
-		Icon = "mouse",
-	})
-
-	InputTab:Space()
-
-	InputTab:Input({
-		Title = "Input Textarea",
-		Type = "Textarea",
-		--Icon = "mouse",
-	})
-
-	InputTab:Space()
-
-	InputTab:Input({
-		Title = "Input",
-		Desc = "Input example",
-	})
-
-	InputTab:Space()
-
-	InputTab:Input({
-		Title = "Input Textarea",
-		Desc = "Input example",
-		Type = "Textarea",
-	})
-
-	InputTab:Space()
-
-	InputTab:Input({
-		Title = "Input",
-		Locked = true,
-		LockedTitle = "This element is locked",
-	})
-
-	InputTab:Input({
-		Title = "Input",
-		Desc = "Input example",
-		Locked = true,
-		LockedTitle = "This element is locked",
-	})
-end
-
--- */  Slider Tab  /* --
-do
-	local SliderTab = ElementsSection:Tab({
-		Title = "Slider",
-		Icon = "solar:square-transfer-horizontal-bold",
-		IconColor = Green,
-		IconShape = "Square",
-		Border = true,
-	})
-
-	SliderTab:Section({
-		Title = "Default Slider with Tooltip and without textbox",
-		TextSize = 14,
-	})
-
-	SliderTab:Slider({
-		Title = "Slider Example",
-		Desc = "Hahahahaha hello",
-		IsTooltip = true,
-		IsTextbox = false,
-		Width = 200,
-		Step = 1,
-		Value = {
-			Min = 0,
-			Max = 200,
-			Default = 100,
-		},
-		Callback = function(value)
-			print(value)
-		end,
-	})
-
-	SliderTab:Space()
-
-	SliderTab:Section({
-		Title = "Slider without description",
-		TextSize = 14,
-	})
-
-	SliderTab:Slider({
-		Title = "Slider Example",
-		Step = 1,
-		Width = 200,
-		Value = {
-			Min = 0,
-			Max = 200,
-			Default = 100,
-		},
-		Callback = function(value)
-			print(value)
-		end,
-	})
-
-	SliderTab:Space()
-
-	SliderTab:Section({
-		Title = "Slider without titles",
-		TextSize = 14,
-	})
-
-	SliderTab:Slider({
-		IsTooltip = true,
-		Step = 1,
-		Value = {
-			Min = 0,
-			Max = 200,
-			Default = 100,
-		},
-		Callback = function(value)
-			print(value)
-		end,
-	})
-
-	SliderTab:Space()
-
-	SliderTab:Section({
-		Title = "Slider with icons ('from' only)",
-		TextSize = 14,
-	})
-
-	SliderTab:Slider({
-		IsTooltip = true,
-		Step = 1,
-		Value = {
-			Min = 0,
-			Max = 200,
-			Default = 100,
-		},
-		Icons = {
-			From = "sfsymbols:sunMinFill",
-			--To = "sfsymbols:sunMaxFill",
-		},
-		Callback = function(value)
-			print(value)
-		end,
-	})
-
-	SliderTab:Space()
-
-	SliderTab:Section({
-		Title = "Slider with icons (from & to)",
-		TextSize = 14,
-	})
-
-	SliderTab:Slider({
-		IsTooltip = true,
-		Step = 1,
-		Value = {
-			Min = 0,
-			Max = 100,
-			Default = 50,
-		},
-		Icons = {
-			From = "sfsymbols:sunMinFill",
-			To = "sfsymbols:sunMaxFill",
-		},
-		Callback = function(value)
-			print(value)
-		end,
-	})
-end
-
--- */  Dropdown Tab  /* --
-do
-	local DropdownTab = ElementsSection:Tab({
-		Title = "Dropdown",
-		Icon = "solar:hamburger-menu-bold",
-		IconColor = Yellow,
-		IconShape = "Square",
-		Border = true,
-	})
-
-	DropdownTab:Dropdown({
-		Title = "Advanced Dropdown (example)",
-		Values = {
-			{
-				Title = "New file",
-				Desc = "Create a new file",
-				Icon = "file-plus",
-				Callback = function()
-					print("Clicked 'New File'")
-				end,
-			},
-			{
-				Title = "Copy link",
-				Desc = "Copy the file link",
-				Icon = "copy",
-				Callback = function()
-					print("Clicked 'Copy link'")
-				end,
-			},
-			{
-				Title = "Edit file",
-				Desc = "Allows you to edit the file",
-				Icon = "file-pen",
-				Callback = function()
-					print("Clicked 'Edit file'")
-				end,
-			},
-			{
-				Type = "Divider",
-			},
-			{
-				Title = "Delete file",
-				Desc = "Permanently delete the file",
-				Icon = "trash",
-				Callback = function()
-					print("Clicked 'Delete file'")
-				end,
-			},
-		},
-	})
-
-	DropdownTab:Space()
-
-	DropdownTab:Dropdown({
-		Title = "Multi Dropdown",
-		Values = {
-			"Привет",
-			"Hello",
-			"Сәлем",
-			"Bonjour",
-		},
-		Value = nil,
-		AllowNone = true,
-		Multi = true,
-		Callback = function(selectedValue)
-			print("Selected: " .. selectedValue)
-		end,
-	})
-
-	DropdownTab:Space()
-
-	DropdownTab:Dropdown({
-		Title = "No Multi Dropdown (default",
-		Values = {
-			"Привет",
-			"Hello",
-			"Сәлем",
-			"Bonjour",
-		},
-		Value = 1,
-		--AllowNone = true,
-		Callback = function(selectedValue)
-			print("Selected: " .. selectedValue)
-		end,
-	})
-
-	DropdownTab:Space()
-end
-
--- */  Config Usage  /* --
-if not RunService:IsStudio() and writefile and printidentity() then
-	do -- config elements
-		local ConfigElementsTab = ConfigUsageSection:Tab({
-			Title = "Config Elements",
-			Icon = "solar:file-text-bold",
-			IconColor = Blue,
-			IconShape = nil,
-			Border = true,
-		})
-
-		-- All elements are taken from the official documentation: https://footagesus.github.io/WindUI-Docs/docs
-
-		-- Saving elements to the config using `Flag`
-
-		ConfigElementsTab:Colorpicker({
-			Flag = "ColorpickerTest",
-			Title = "Colorpicker",
-			Desc = "Colorpicker Description",
-			Default = Color3.fromRGB(0, 255, 0),
-			Transparency = 0,
-			Locked = false,
-			Callback = function(color)
-				print("Background color: " .. tostring(color))
-			end,
-		})
-
-		ConfigElementsTab:Space()
-
-		ConfigElementsTab:Dropdown({
-			Flag = "DropdownTest",
-			Title = "Advanced Dropdown",
-			Values = {
-				{
-					Title = "Category A",
-					Icon = "bird",
-				},
-				{
-					Title = "Category B",
-					Icon = "house",
-				},
-				{
-					Title = "Category C",
-					Icon = "droplet",
-				},
-			},
-			Value = "Category A",
-			Callback = function(option)
-				print("Category selected: " .. option.Title .. " with icon " .. option.Icon)
-			end,
-		})
-		ConfigElementsTab:Dropdown({
-			Flag = "DropdownTest2",
-			Title = "Advanced Dropdown 2",
-			Values = {
-				{
-					Title = "Category A",
-					Icon = "bird",
-				},
-				{
-					Title = "Category B",
-					Icon = "house",
-				},
-				{
-					Title = "Category C",
-					Icon = "droplet",
-					Locked = true,
-				},
-			},
-			Value = "Category A",
-			Multi = true,
-			Callback = function(options)
-				local titles = {}
-				for _, v in ipairs(options) do
-					table.insert(titles, v.Title)
-				end
-				print("Selected: " .. table.concat(titles, ", "))
-			end,
-		})
-
-		ConfigElementsTab:Space()
-
-		ConfigElementsTab:Input({
-			Flag = "InputTest",
-			Title = "Input",
-			Desc = "Input Description",
-			Value = "Default value",
-			InputIcon = "bird",
-			Type = "Input", -- or "Textarea"
-			Placeholder = "Enter text...",
-			Callback = function(input)
-				print("Text entered: " .. input)
-			end,
-		})
-
-		ConfigElementsTab:Space()
-
-		ConfigElementsTab:Keybind({
-			Flag = "KeybindTest",
-			Title = "Keybind",
-			Desc = "Keybind to open ui",
-			Value = "G",
-			Callback = function(v)
-				Window:SetToggleKey(Enum.KeyCode[v])
-			end,
-		})
-
-		ConfigElementsTab:Space()
-
-		ConfigElementsTab:Slider({
-			Flag = "SliderTest",
-			Title = "Slider",
-			Step = 1,
-			Value = {
-				Min = 20,
-				Max = 120,
-				Default = 70,
-			},
-			Callback = function(value)
-				print(value)
-			end,
-		})
-		ConfigElementsTab:Slider({
-			Flag = "SliderTest2",
-			--Title = "Slider",
-			Icons = {
-				From = "sfsymbols:sunMinFill",
-				To = "sfsymbols:sunMaxFill",
-			},
-			Step = 1,
-			IsTooltip = true,
-			Value = {
-				Min = 0,
-				Max = 100,
-				Default = 50,
-			},
-			Callback = function(value)
-				print(value)
-			end,
-		})
-
-		ConfigElementsTab:Space()
-
-		ConfigElementsTab:Toggle({
-			Flag = "ToggleTest",
-			Title = "Toggle Panel Background",
-			--Desc = "Toggle Description",
-			--Icon = "house",
-			--Type = "Checkbox",
-			Value = not Window.HidePanelBackground,
-			Callback = function(state)
-				Window:SetPanelBackground(state)
-			end,
-		})
-
-		ConfigElementsTab:Toggle({
-			Flag = "ToggleTest",
-			Title = "Toggle",
-			Desc = "Toggle Description",
-			--Icon = "house",
-			--Type = "Checkbox",
-			Value = false,
-			Callback = function(state)
-				print("Toggle Activated" .. tostring(state))
-			end,
-		})
-	end
-
-	do -- config panel
-		local ConfigTab = ConfigUsageSection:Tab({
-			Title = "Config Usage",
-			Icon = "solar:folder-with-files-bold",
-			IconColor = Purple,
-			IconShape = nil,
-			Border = true,
-		})
-
-		local ConfigManager = Window.ConfigManager
-		local ConfigName = "default"
-
-		local ConfigNameInput = ConfigTab:Input({
-			Title = "Config Name",
-			Icon = "file-cog",
-			Callback = function(value)
-				ConfigName = value
-			end,
-		})
-
-		ConfigTab:Space()
-
-		-- local AutoLoadToggle = ConfigTab:Toggle({
-		--     Title = "Enable Auto Load to Selected Config",
-		--     Value = false,
-		--     Callback = function(v)
-		--         Window.CurrentConfig:SetAutoLoad(v)
-		--     end
-		-- })
-
-		-- ConfigTab:Space()
-
-		local AllConfigs = ConfigManager:AllConfigs()
-		local DefaultValue = table.find(AllConfigs, ConfigName) and ConfigName or nil
-
-		local AllConfigsDropdown = ConfigTab:Dropdown({
-			Title = "All Configs",
-			Desc = "Select existing configs",
-			Values = AllConfigs,
-			Value = DefaultValue,
-			Callback = function(value)
-				ConfigName = value
-				ConfigNameInput:Set(value)
-
-				--AutoLoadToggle:Set(ConfigManager:GetConfig(ConfigName).AutoLoad or false)
-			end,
-		})
-
-		ConfigTab:Space()
-
-		ConfigTab:Button({
-			Title = "Save Config",
-			Icon = "",
-			Justify = "Center",
-			Callback = function()
-				Window.CurrentConfig = ConfigManager:Config(ConfigName)
-				if Window.CurrentConfig:Save() then
-					WindUI:Notify({
-						Title = "Config Saved",
-						Desc = "Config '" .. ConfigName .. "' saved",
-						Icon = "check",
-					})
-				end
-
-				AllConfigsDropdown:Refresh(ConfigManager:AllConfigs())
-			end,
-		})
-
-		ConfigTab:Space()
-
-		ConfigTab:Button({
-			Title = "Load Config",
-			Icon = "",
-			Justify = "Center",
-			Callback = function()
-				Window.CurrentConfig = ConfigManager:CreateConfig(ConfigName)
-				if Window.CurrentConfig:Load() then
-					WindUI:Notify({
-						Title = "Config Loaded",
-						Desc = "Config '" .. ConfigName .. "' loaded",
-						Icon = "refresh-cw",
-					})
-				end
-			end,
-		})
-
-		ConfigTab:Space()
-
-		ConfigTab:Button({
-			Title = "Print AutoLoad Configs",
-			Icon = "",
-			Justify = "Center",
-			Callback = function()
-				print(HttpService:JSONDecode(ConfigManager:GetAutoLoadConfigs()))
-			end,
-		})
-	end
-end
-
--- */  Other  /* --
-do
-	local InviteCode = "ftgs-development-hub-1300692552005189632"
-	local DiscordAPI = "https://discord.com/api/v10/invites/" .. InviteCode .. "?with_counts=true&with_expiration=true"
-
-	local Response = WindUI.cloneref(game:GetService("HttpService"))
-		:JSONDecode(WindUI.Creator.Request and WindUI.Creator.Request({
-			Url = DiscordAPI,
-			Method = "GET",
-			Headers = {
-				["User-Agent"] = "WindUI/Example",
-				["Accept"] = "application/json",
-			},
-		}).Body or "{}")
-
-	local DiscordTab = OtherSection:Tab({
-		Title = "Discord",
-		Border = true,
-	})
-
-	if Response and Response.guild then
-		DiscordTab:Section({
-			Title = "Join our Discord server!",
-			TextSize = 20,
-		})
-		local DiscordServerParagraph = DiscordTab:Paragraph({
-			Title = tostring(Response.guild.name),
-			Desc = tostring(Response.guild.description),
-			Image = "https://cdn.discordapp.com/icons/"
-				.. Response.guild.id
-				.. "/"
-				.. Response.guild.icon
-				.. ".png?size=1024",
-			Thumbnail = "https://cdn.discordapp.com/banners/1300692552005189632/35981388401406a4b7dffd6f447a64c4.png?size=512",
-			ImageSize = 48,
-			Buttons = {
-				{
-					Title = "Copy link",
-					Icon = "link",
-					Callback = function()
-						setclipboard("https://discord.gg/" .. InviteCode)
-					end,
-				},
-			},
-		})
-	elseif RunService:IsStudio() or not writefile then
-		DiscordTab:Paragraph({
-			Title = "Discord API is not available in Studio mode.",
-			TextSize = 20,
-			Justify = "Center",
-			Image = "solar:info-circle-bold",
-			Color = "Red",
-			Buttons = {
-				{
-					Title = "Get/Copy Invite Link",
-					Icon = "link",
-					Callback = function()
-						if setclipboard then
-							setclipboard("https://discord.gg/" .. InviteCode)
-						else
-							WindUI:Notify({
-								Title = "Discord Invite Link",
-								Content = "https://discord.gg/" .. InviteCode,
-							})
+-- ============================================================
+-- Anti-Camp Alert System
+-- ============================================================
+local function startAntiCampSystem()
+	RunService.Heartbeat:Connect(function()
+		if not GameplayState.AntiCamp then return end
+
+		local myHRP = getHRP(LocalPlayer.Character)
+		if not myHRP then return end
+
+		-- Check if any killer is near any hook
+		local killers, _, _, _, hooks, _ = findGameObjects()
+		for _, killer in ipairs(killers) do
+			local killerHRP = getHRP(killer) or (killer:FindFirstChild("HumanoidRootPart"))
+			if killerHRP then
+				for _, hook in ipairs(hooks) do
+					local hookHRP = getHRP(hook) or hook.PrimaryPart
+					if hookHRP then
+						local dist = (killerHRP.Position - hookHRP.Position).Magnitude
+						if dist < 15 then
+							-- Killer is camping near a hook
+							local myDist = (myHRP.Position - hookHRP.Position).Magnitude
+							if myDist < 80 then
+								WindUI:Notify({
+									Title = "Anti Camp Alert",
+									Content = string.format("Killer sedang camp di hook! Jarak: %d", math.floor(dist)),
+									Duration = 4,
+								})
+								task.wait(5) -- Cooldown between alerts
+							end
 						end
-					end,
-				},
-			},
-		})
-	else
-		DiscordTab:Paragraph({
-			Title = "Failed to fetch Discord server info.",
-			TextSize = 20,
-			Justify = "Center",
-			Image = "solar:info-circle-bold",
-			Color = "Red",
-		})
-	end
+					end
+				end
+			end
+		end
+	end)
 end
 
-local Tabs = {
-	ExampleTab = Window:Tab({
-		Title = "Example Tab",
-		Icon = "bird",
-	}),
-}
+startAntiCampSystem()
 
-local dropdownA
+-- ============================================================
+-- Auto Skill Check System
+-- ============================================================
+local function startAutoSkillCheck()
+	RunService.RenderStepped:Connect(function()
+		if not GameplayState.AutoSkillCheck then return end
 
-local LargeListA = {
-	"All",
-	"Item A2",
-	"Item A3",
-	"Item A4",
-	"Item A5",
-	"Item A6",
-	"Item A7",
-	"Item A8",
-	"Item A9",
-	"Item A10",
-	"Item A11",
-	"Item A12",
-	"Item A13",
-	"Item A14",
-	"Item A15",
-	"Item A16",
-	"Item A17",
-	"Item A18",
-	"Item A19",
-	"Item A20",
-	"Item A21",
-	"Item A22",
-	"Item A23",
-	"Item A24",
-	"Item A25",
-	"Item A26",
-	"Item A27",
-	"Item A28",
-	"Item A29",
-	"Item A30",
-	"Item A31",
-	"Item A32",
-	"Item A33",
-	"Item A34",
-	"Item A35",
-	"Item A36",
-	"Item A37",
-	"Item A38",
-	"Item A39",
-	"Item A40",
-	"Item A41",
-	"Item A42",
-	"Item A43",
-	"Item A44",
-	"Item A45",
-	"Item A46",
-	"Item A47",
-	"Item A48",
-	"Item A49",
-	"Item A50",
-	"Item A51",
-	"Item A52",
-	"Item A53",
-	"Item A54",
-	"Item A55",
-	"Item A56",
-	"Item A57",
-	"Item A58",
-	"Item A59",
-	"Item A60",
-	"Item A61",
-	"Item A62",
-	"Item A63",
-	"Item A64",
-	"Item A65",
-	"Item A66",
-	"Item A67",
-	"Item A68",
-	"Item A69",
-	"Item A70",
-	"Item A71",
-	"Item A72",
-	"Item A73",
-	"Item A74",
-	"Item A75",
-	"Item A76",
-	"Item A77",
-	"Item A78",
-	"Item A79",
-	"Item A80",
-	"Item A81",
-	"Item A82",
-	"Item A83",
-	"Item A84",
-	"Item A85",
-	"Item A86",
-	"Item A87",
-	"Item A88",
-	"Item A89",
-	"Item A90",
-	"Item A91",
-	"Item A92",
-	"Item A93",
-	"Item A94",
-	"Item A95",
-	"Item A96",
-	"Item A97",
-	"Item A98",
-	"Item A99",
-	"Item A100",
-}
+		-- Look for skill check UI elements in PlayerGui
+		local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+		if not playerGui then return end
 
-local LargeListB = {
-	"Data B1",
-	"Data B2",
-	"Data B3",
-	"Data B4",
-	"Data B5",
-	"Data B6",
-	"Data B7",
-	"Data B8",
-	"Data B9",
-	"Data B10",
-}
-
-Tabs.ExampleTab:Dropdown({
-	Title = "Main Category",
-	Values = { "All", "Other Option" },
-	Value = "All",
-	Callback = function(option)
-		if dropdownA then
-			task.spawn(function()
-				if option == "All" then
-					dropdownA:Refresh(LargeListA)
-				else
-					dropdownA:Refresh(LargeListB)
+		for _, guiItem in ipairs(playerGui:GetDescendants()) do
+			local name = string.lower(guiItem.Name)
+			if name:find("skillcheck") or name:find("skill_check") or name:find("skill") then
+				-- Attempt to find and interact with the skill check button/hit zone
+				if guiItem:IsA("ImageButton") or guiItem:IsA("TextButton") then
+					pcall(function()
+						guiItem.Activate:Fire()
+					end)
 				end
-
-				dropdownA:Select({ "All" })
-			end)
+				-- Also try to find a remote event for skill checks
+			end
 		end
-	end,
-})
 
-dropdownA = Tabs.ExampleTab:Dropdown({
-	Title = "Target",
-	Values = LargeListA,
-	Multi = true,
-	Value = { "All" },
-	Callback = function(option) end,
+		-- Check for skill check related remote events
+		for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+			local name = string.lower(obj.Name)
+			if (name:find("skill") or name:find("check")) and obj:IsA("RemoteEvent") then
+				pcall(function()
+					obj:FireServer(true) -- Attempt to auto-complete skill check
+				end)
+			end
+		end
+	end)
+end
+
+startAutoSkillCheck()
+
+-- ============================================================
+-- No Stun System
+-- ============================================================
+local function startNoStunSystem()
+	RunService.Heartbeat:Connect(function()
+		if not GameplayState.NoStun then return end
+
+		local char = LocalPlayer.Character
+		if not char or not char:FindFirstChild("Humanoid") then return end
+
+		local humanoid = char.Humanoid
+
+		-- Remove stun states
+		if humanoid.PlatformStand then
+			humanoid.PlatformStand = false
+		end
+
+		-- Reset walk speed if it was reduced by stun
+		if GameplayState.WalkSpeedBoost and humanoid.WalkSpeed < GameplayState.CustomWalkSpeed * 0.5 then
+			humanoid.WalkSpeed = GameplayState.CustomWalkSpeed
+		end
+	end)
+end
+
+startNoStunSystem()
+
+-- ============================================================
+-- Instant Vault System
+-- ============================================================
+local function startInstantVaultSystem()
+	-- Monitor for vault interactions
+	RunService.Heartbeat:Connect(function()
+		if not GameplayState.InstantVault then return end
+
+		local char = LocalPlayer.Character
+		if not char then return end
+
+		local humanoid = char:FindFirstChild("Humanoid")
+		if not humanoid then return end
+
+		-- Speed up vaulting by manipulating animation speed
+		for _, animTrack in ipairs(humanoid:GetPlayingAnimationTracks()) do
+			local name = string.lower(animTrack.Animation.Name)
+			if name:find("vault") or name:find("climb") or name:find("jump") then
+				animTrack:AdjustSpeed(5) -- Speed up vault animation
+			end
+		end
+	end)
+end
+
+startInstantVaultSystem()
+
+-- ============================================================
+-- Notify on Load
+-- ============================================================
+WindUI:Notify({
+	Title = "Zetttify | Violence District",
+	Content = "Script loaded successfully! Gunakan menu untuk mengaktifkan fitur.",
+	Icon = "solar:check-circle-bold",
+	Duration = 5,
 })
