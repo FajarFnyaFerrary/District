@@ -230,7 +230,7 @@ TabSettings:Dropdown({
 			Window:SetAuthor("Loading...")
 			if not CachedPRData[PRNumber] then
 				local Success, Data = pcall(function()
-					return Remote:InvokeServer("Footagesus", "WindUI", PRNumber)
+					return Remote:InvokeServer("Zetttify", "WindUI", PRNumber)
 				end)
 
 				if Success and Data and Data.html_url then
