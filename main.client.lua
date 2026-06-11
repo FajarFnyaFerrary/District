@@ -71,7 +71,7 @@ end
 
 -- */  Window  /* --
 local Window = WindUI:CreateWindow({
-	Title = ".ftgs hub  |  WindUI Example",
+	Title = "Zetttify | Violence District VFree",
 	--Author = "by .ftgs • Footagesus",
 	Folder = "ftgshub",
 	Icon = "solar:folder-2-bold-duotone",
@@ -83,7 +83,7 @@ local Window = WindUI:CreateWindow({
 	HideSearchBar = false,
 
 	OpenButton = {
-		Title = "Open .ftgs hub UI", -- can be changed
+		Title = "OPEN MENU", -- can be changed
 		CornerRadius = UDim.new(1, 0), -- fully rounded
 		StrokeThickness = 3, -- removing outline
 		Enabled = true, -- enable or disable openbutton
