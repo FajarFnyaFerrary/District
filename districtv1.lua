@@ -35,8 +35,8 @@ end
 local ThemeName = "Dark"
 
 local Window = WindUI:CreateWindow({
-	Title = "Violence District- " .. ThemeName,
-	Author = "by Fajar",
+	Title = "Violence District - " .. ThemeName,
+	Author = "by Zetttify",
 	Icon = "solar:code-square-bold",
 	Theme = ThemeName,
 
