@@ -52,15 +52,17 @@ local Window = WindUI:CreateWindow({
 	ToggleKey = Enum.KeyCode.F,
 	Acrylic = true,
 
-	--[[
 	KeySystem = {
-		Title = "Key System",
-		Description = "Enter the correct key to unlock the window",
-		KeyValidator = function(key)
-			return key == "HelloWorld"
-		end,
+		Note = "Please login using your key.",
+		API = {
+			{
+				Type = "platoboost",
+				ServiceId = 26195,
+				Secret = "8d7de7ed-e9d3-47ab-a6ee-911d31ef4647",
+			},
+		},
+		SaveKey = false,
 	}
-	]]
 })
 
 local Tag = Window:Tag({
