@@ -54,7 +54,9 @@ local Window = WindUI:CreateWindow({
 })
 
 local Tag = Window:Tag({
-	Title = "Hi my tag",
+	Title = "PREMIUM",
+	Icon = "sfsymbols:printerFill",
+	IconSize = 22,
 	Color = "Text",
 })
 
