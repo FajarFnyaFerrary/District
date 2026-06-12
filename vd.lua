@@ -276,15 +276,15 @@ Window.Topbar:Button({
 })
 
 -- ═══════════════════════════════════════════════════════════════════════
---  TABS CREATION  (FIXED: tanpa Select(), tanpa Space({Columns=1}))
+--  TABS CREATION
 -- ═══════════════════════════════════════════════════════════════════════
 
-local TabVIP  = Window:Tab({ Title = "VIP",        Icon = "solar:crown-bold",             IconThemed = true })
-local TabSurv = Window:Tab({ Title = "Survivor",   Icon = "solar:shield-bold",            IconThemed = true })
-local TabKill = Window:Tab({ Title = "Killer",     Icon = "solar:danger-triangle-bold",   IconThemed = true })
-local TabVis  = Window:Tab({ Title = "Visuals",    Icon = "solar:eye-bold",               IconThemed = true })
-local TabComb = Window:Tab({ Title = "Combat",     Icon = "solar:target-bold",            IconThemed = true })
-local TabAuto = Window:Tab({ Title = "Automation", Icon = "solar:settings-bold",          IconThemed = true })
+local TabVIP  = Window:Tab({ Title = "VIP",        Icon = "solar:crown-bold",           IconThemed = true })
+local TabSurv = Window:Tab({ Title = "Survivor",   Icon = "solar:shield-bold",          IconThemed = true })
+local TabKill = Window:Tab({ Title = "Killer",     Icon = "solar:danger-triangle-bold",  IconThemed = true })
+local TabVis  = Window:Tab({ Title = "Visuals",    Icon = "solar:eye-bold",             IconThemed = true })
+local TabComb = Window:Tab({ Title = "Combat",     Icon = "solar:target-bold",          IconThemed = true })
+local TabAuto = Window:Tab({ Title = "Automation", Icon = "solar:settings-bold",         IconThemed = true })
 
 -- ╔══════════════════════════════════════════════════════════════════════════════╗
 -- ║  TAB 1 — VIP (ULTIMATE AUTOMATIC)                                         ║
@@ -295,6 +295,7 @@ TabVIP:Section({
         Desc = "Bot cerdas pencari Generator, Auto Parry, dan Wiggle Master",
         Icon = "solar:crown-bold",
         IconThemed = true,
+        Opened = true,
 })
 
 TabVIP:Toggle({
@@ -357,6 +358,7 @@ TabSurv:Section({
         Desc = "Kecepatan, anti-slowdown, dan anti-stuck",
         Icon = "solar:bolt-bold",
         IconThemed = true,
+        Opened = true,
 })
 
 TabSurv:Toggle({
@@ -422,32 +424,30 @@ TabSurv:Button({
         end,
 })
 
--- 2-column: Silent Actions | Anti Fall Damage
-TabSurv:Space({ Columns = 2 })
-
-local GrpSilent = TabSurv:Group()
-GrpSilent:Toggle({
-        Title = "Silent Actions",
-        Desc = "Anti-Noise: berlari tanpa notifikasi ke Killer",
-        Icon = "solar:volume-cross-bold",
-        Value = false,
-        Callback = function(v)
-                Config.SilentActions = v
-                if v then WindUI:Notify({ Title = "Silent Actions", Content = "Bergerak tanpa suara/visual ke Killer" }) end
-        end,
-})
-
-local GrpFall = TabSurv:Group()
-GrpFall:Toggle({
-        Title = "Anti Fall Damage",
-        Desc = "Mencegah damage & animasi kaku saat jatuh",
-        Icon = "solar:shield-minimalistic-bold",
-        Value = false,
-        Callback = function(v)
-                Config.AntiFallDamage = v
-                if v then WindUI:Notify({ Title = "Anti Fall", Content = "Fall damage dinonaktifkan!" }) end
-        end,
-})
+-- 2-column: Silent Actions | Anti Fall Damage (Group callback style)
+TabSurv:Group(function(grp)
+        grp:Toggle({
+                Title = "Silent Actions",
+                Desc = "Anti-Noise: berlari tanpa notifikasi ke Killer",
+                Icon = "solar:volume-cross-bold",
+                Value = false,
+                Callback = function(v)
+                        Config.SilentActions = v
+                        if v then WindUI:Notify({ Title = "Silent Actions", Content = "Bergerak tanpa suara/visual ke Killer" }) end
+                end,
+        })
+        grp:Space({ Columns = 2 })
+        grp:Toggle({
+                Title = "Anti Fall Damage",
+                Desc = "Mencegah damage & animasi kaku saat jatuh",
+                Icon = "solar:shield-minimalistic-bold",
+                Value = false,
+                Callback = function(v)
+                        Config.AntiFallDamage = v
+                        if v then WindUI:Notify({ Title = "Anti Fall", Content = "Fall damage dinonaktifkan!" }) end
+                end,
+        })
+end)
 
 -- ── Survivor: Health & Defense ──
 
@@ -456,6 +456,7 @@ TabSurv:Section({
         Desc = "God Mode, Heal, Anti Knock, dan Heal Aura",
         Icon = "solar:heart-pulse-bold",
         IconThemed = true,
+        Opened = true,
 })
 
 TabSurv:Toggle({
@@ -469,36 +470,34 @@ TabSurv:Toggle({
         end,
 })
 
--- 2-column: Instant Heal | Anti Knock
-TabSurv:Space({ Columns = 2 })
-
-local GrpHeal = TabSurv:Group()
-GrpHeal:Button({
-        Title = "Instant Heal",
-        Justify = "Center",
-        Icon = "solar:heart-pulse-bold",
-        IconAlign = "Left",
-        Size = "Small",
-        Callback = function()
-                local humanoid = getHumanoid()
-                if humanoid then
-                        humanoid.Health = humanoid.MaxHealth
-                        WindUI:Notify({ Title = "Healed", Content = "Dipulihkan ke Max Health!" })
-                end
-        end,
-})
-
-local GrpKnock = TabSurv:Group()
-GrpKnock:Toggle({
-        Title = "Anti Knock",
-        Desc = "Mencegah knocked down saat dipukul",
-        Icon = "solar:shield-check-bold",
-        Value = false,
-        Callback = function(v)
-                Config.AntiKnock = v
-                if v then WindUI:Notify({ Title = "Anti Knock", Content = "Tidak bisa di-knock down!" }) end
-        end,
-})
+-- 2-column: Instant Heal | Anti Knock (Group callback style)
+TabSurv:Group(function(grp)
+        grp:Button({
+                Title = "Instant Heal",
+                Justify = "Center",
+                Icon = "solar:heart-pulse-bold",
+                IconAlign = "Left",
+                Size = "Small",
+                Callback = function()
+                        local humanoid = getHumanoid()
+                        if humanoid then
+                                humanoid.Health = humanoid.MaxHealth
+                                WindUI:Notify({ Title = "Healed", Content = "Dipulihkan ke Max Health!" })
+                        end
+                end,
+        })
+        grp:Space({ Columns = 2 })
+        grp:Toggle({
+                Title = "Anti Knock",
+                Desc = "Mencegah knocked down saat dipukul",
+                Icon = "solar:shield-check-bold",
+                Value = false,
+                Callback = function(v)
+                        Config.AntiKnock = v
+                        if v then WindUI:Notify({ Title = "Anti Knock", Content = "Tidak bisa di-knock down!" }) end
+                end,
+        })
+end)
 
 TabSurv:Toggle({
         Title = "Auto Heal Aura",
@@ -529,6 +528,7 @@ TabKill:Section({
         Desc = "Modifikasi tombak: Aimbot prediksi & No Gravity",
         Icon = "solar:bolt-bold",
         IconThemed = true,
+        Opened = true,
 })
 
 TabKill:Toggle({
@@ -558,40 +558,40 @@ TabKill:Section({
         Desc = "Anti-Blind, Anti-Stun, dan Killer Power",
         Icon = "solar:shield-bold",
         IconThemed = true,
+        Opened = true,
 })
 
--- 2-column: Anti-Blind | Anti-Stun
-TabKill:Space({ Columns = 2 })
-
-local GrpBlind = TabKill:Group()
-GrpBlind:Toggle({
-        Title = "Anti-Blind",
-        Desc = "Kebal Fog & Flash",
-        Icon = "solar:eye-closed-bold",
-        Value = false,
-        Callback = function(v)
-                Config.AntiBlind = v
-                if v then WindUI:Notify({ Title = "Anti-Blind", Content = "Kebal efek kabur & kilatan!" }) end
-        end,
-})
-
-local GrpStun = TabKill:Group()
-GrpStun:Toggle({
-        Title = "Anti-Stun",
-        Desc = "Kebal stun Pallet",
-        Icon = "solar:shield-bold",
-        Value = false,
-        Callback = function(v)
-                Config.AntiStun = v
-                if v then WindUI:Notify({ Title = "Anti-Stun", Content = "Tidak bisa di-stun!" }) end
-        end,
-})
+-- 2-column: Anti-Blind | Anti-Stun (Group callback style)
+TabKill:Group(function(grp)
+        grp:Toggle({
+                Title = "Anti-Blind",
+                Desc = "Kebal Fog & Flash",
+                Icon = "solar:eye-closed-bold",
+                Value = false,
+                Callback = function(v)
+                        Config.AntiBlind = v
+                        if v then WindUI:Notify({ Title = "Anti-Blind", Content = "Kebal efek kabur & kilatan!" }) end
+                end,
+        })
+        grp:Space({ Columns = 2 })
+        grp:Toggle({
+                Title = "Anti-Stun",
+                Desc = "Kebal stun Pallet",
+                Icon = "solar:shield-bold",
+                Value = false,
+                Callback = function(v)
+                        Config.AntiStun = v
+                        if v then WindUI:Notify({ Title = "Anti-Stun", Content = "Tidak bisa di-stun!" }) end
+                end,
+        })
+end)
 
 TabKill:Section({
         Title = "Generator Attack",
         Desc = "Kerusakan Generator berlipat dan Activate Power",
         Icon = "solar:bomb-bold",
         IconThemed = true,
+        Opened = true,
 })
 
 TabKill:Toggle({
@@ -639,40 +639,40 @@ TabVis:Section({
         Desc = "Player ESP (warna beda Survivor/Killer) dan Object ESP",
         Icon = "solar:eye-bold",
         IconThemed = true,
+        Opened = true,
 })
 
--- 2-column: Player ESP | Object ESP
-TabVis:Space({ Columns = 2 })
-
-local GrpPESP = TabVis:Group()
-GrpPESP:Toggle({
-        Title = "Player ESP",
-        Desc = "Lokasi Survivor (hijau) & Killer (merah) + jarak, status, nama",
-        Icon = "solar:users-group-rounded-bold",
-        Value = false,
-        Callback = function(v)
-                Config.PlayerESP = v
-                if v then WindUI:Notify({ Title = "Player ESP", Content = "Menampilkan semua pemain!" }) end
-        end,
-})
-
-local GrpOESP = TabVis:Group()
-GrpOESP:Toggle({
-        Title = "Object ESP",
-        Desc = "Generator (%), Pallet, Exit Gate, dan Hook",
-        Icon = "solar:box-bold",
-        Value = false,
-        Callback = function(v)
-                Config.ObjectESP = v
-                if v then WindUI:Notify({ Title = "Object ESP", Content = "Generator, Pallet, Gate, Hook terlihat!" }) end
-        end,
-})
+-- 2-column: Player ESP | Object ESP (Group callback style)
+TabVis:Group(function(grp)
+        grp:Toggle({
+                Title = "Player ESP",
+                Desc = "Survivor (hijau) & Killer (merah) + jarak, status, nama",
+                Icon = "solar:users-group-rounded-bold",
+                Value = false,
+                Callback = function(v)
+                        Config.PlayerESP = v
+                        if v then WindUI:Notify({ Title = "Player ESP", Content = "Menampilkan semua pemain!" }) end
+                end,
+        })
+        grp:Space({ Columns = 2 })
+        grp:Toggle({
+                Title = "Object ESP",
+                Desc = "Generator (%), Pallet, Exit Gate, dan Hook",
+                Icon = "solar:box-bold",
+                Value = false,
+                Callback = function(v)
+                        Config.ObjectESP = v
+                        if v then WindUI:Notify({ Title = "Object ESP", Content = "Generator, Pallet, Gate, Hook terlihat!" }) end
+                end,
+        })
+end)
 
 TabVis:Section({
         Title = "Camera & Effects",
         Desc = "FOV, Crosshair, Fullbright, Potato Mode",
         Icon = "solar:camera-bold",
         IconThemed = true,
+        Opened = true,
 })
 
 TabVis:Toggle({
@@ -706,32 +706,30 @@ TabVis:Toggle({
         Callback = function(v) Config.ShowCrosshair = v end,
 })
 
--- 2-column: Remove Blur/Bloom | Force Fullbright
-TabVis:Space({ Columns = 2 })
-
-local GrpBlur = TabVis:Group()
-GrpBlur:Toggle({
-        Title = "Remove Blur & Bloom",
-        Desc = "Matikan efek buram & pantulan cahaya",
-        Icon = "solar:eye-closed-bold",
-        Value = false,
-        Callback = function(v)
-                Config.RemoveBlurBloom = v
-                if v then WindUI:Notify({ Title = "Effects Off", Content = "Blur & Bloom dimatikan!" }) end
-        end,
-})
-
-local GrpBright = TabVis:Group()
-GrpBright:Toggle({
-        Title = "Force Fullbright",
-        Desc = "Map terang tanpa bayangan",
-        Icon = "solar:sun-2-bold",
-        Value = false,
-        Callback = function(v)
-                Config.ForceFullbright = v
-                if v then WindUI:Notify({ Title = "Fullbright", Content = "Map terang tanpa bayangan!" }) end
-        end,
-})
+-- 2-column: Remove Blur/Bloom | Force Fullbright (Group callback style)
+TabVis:Group(function(grp)
+        grp:Toggle({
+                Title = "Remove Blur & Bloom",
+                Desc = "Matikan efek buram & pantulan cahaya",
+                Icon = "solar:eye-closed-bold",
+                Value = false,
+                Callback = function(v)
+                        Config.RemoveBlurBloom = v
+                        if v then WindUI:Notify({ Title = "Effects Off", Content = "Blur & Bloom dimatikan!" }) end
+                end,
+        })
+        grp:Space({ Columns = 2 })
+        grp:Toggle({
+                Title = "Force Fullbright",
+                Desc = "Map terang tanpa bayangan",
+                Icon = "solar:sun-2-bold",
+                Value = false,
+                Callback = function(v)
+                        Config.ForceFullbright = v
+                        if v then WindUI:Notify({ Title = "Fullbright", Content = "Map terang tanpa bayangan!" }) end
+                end,
+        })
+end)
 
 TabVis:Toggle({
         Title = "Extreme Potato Mode",
@@ -753,6 +751,7 @@ TabComb:Section({
         Desc = "Mengunci bidikan, tracer, dan highlight target",
         Icon = "solar:target-bold",
         IconThemed = true,
+        Opened = true,
 })
 
 TabComb:Toggle({
@@ -775,32 +774,31 @@ TabComb:Slider({
         Callback = function(value) Config.AimRadius = value end,
 })
 
--- 2-column: Target Tracer | Lock-On Highlight
-TabComb:Space({ Columns = 2 })
-
-local GrpTracer = TabComb:Group()
-GrpTracer:Toggle({
-        Title = "Show Target Tracer",
-        Desc = "Garis laser merah ke target",
-        Icon = "solar:linear-bold",
-        Value = false,
-        Callback = function(v) Config.ShowTargetTracer = v end,
-})
-
-local GrpLock = TabComb:Group()
-GrpLock:Toggle({
-        Title = "Lock-On Highlight",
-        Desc = "Tubuh target bersinar Merah/Emas",
-        Icon = "solar:star-bold",
-        Value = false,
-        Callback = function(v) Config.LockOnHighlight = v end,
-})
+-- 2-column: Target Tracer | Lock-On Highlight (Group callback style)
+TabComb:Group(function(grp)
+        grp:Toggle({
+                Title = "Show Target Tracer",
+                Desc = "Garis laser merah ke target",
+                Icon = "solar:linear-bold",
+                Value = false,
+                Callback = function(v) Config.ShowTargetTracer = v end,
+        })
+        grp:Space({ Columns = 2 })
+        grp:Toggle({
+                Title = "Lock-On Highlight",
+                Desc = "Tubuh target bersinar Merah/Emas",
+                Icon = "solar:star-bold",
+                Value = false,
+                Callback = function(v) Config.LockOnHighlight = v end,
+        })
+end)
 
 TabComb:Section({
         Title = "Camera & Hitbox",
         Desc = "FPP/TPP Toggle, Expand Hitbox, dan Auto Attack",
         Icon = "solar:camera-rotate-bold",
         IconThemed = true,
+        Opened = true,
 })
 
 TabComb:Button({
@@ -853,13 +851,14 @@ TabComb:Slider({
 
 -- ╔══════════════════════════════════════════════════════════════════════════════╗
 -- ║  TAB 6 — AUTOMATION (GENERATOR & UTILITY)                                ║
--- ╚══════════════════════════════════════════════════════════════════════════════╝
+-- ╚════════════════════════════════════════════════════════════════════════════════╝
 
 TabAuto:Section({
         Title = "Generator",
         Desc = "Auto SkillCheck dan Boost semua Generator",
         Icon = "solar:bolt-circle-bold",
         IconThemed = true,
+        Opened = true,
 })
 
 TabAuto:Toggle({
@@ -873,34 +872,32 @@ TabAuto:Toggle({
         end,
 })
 
--- 2-column: Mode Perfect | Mode Neutral
-TabAuto:Space({ Columns = 2 })
-
-local GrpPerfect = TabAuto:Group()
-GrpPerfect:Button({
-        Title = "Mode: Perfect",
-        Justify = "Center",
-        Icon = "solar:check-circle-bold",
-        IconAlign = "Left",
-        Size = "Small",
-        Callback = function()
-                Config.GenSkillCheckMode = "Perfect"
-                WindUI:Notify({ Title = "SkillCheck", Content = "Mode: Perfect" })
-        end,
-})
-
-local GrpNeutral = TabAuto:Group()
-GrpNeutral:Button({
-        Title = "Mode: Neutral",
-        Justify = "Center",
-        Icon = "solar:minus-circle-bold",
-        IconAlign = "Left",
-        Size = "Small",
-        Callback = function()
-                Config.GenSkillCheckMode = "Neutral"
-                WindUI:Notify({ Title = "SkillCheck", Content = "Mode: Neutral" })
-        end,
-})
+-- 2-column: Mode Perfect | Mode Neutral (Group callback style)
+TabAuto:Group(function(grp)
+        grp:Button({
+                Title = "Mode: Perfect",
+                Justify = "Center",
+                Icon = "solar:check-circle-bold",
+                IconAlign = "Left",
+                Size = "Small",
+                Callback = function()
+                        Config.GenSkillCheckMode = "Perfect"
+                        WindUI:Notify({ Title = "SkillCheck", Content = "Mode: Perfect" })
+                end,
+        })
+        grp:Space({ Columns = 2 })
+        grp:Button({
+                Title = "Mode: Neutral",
+                Justify = "Center",
+                Icon = "solar:minus-circle-bold",
+                IconAlign = "Left",
+                Size = "Small",
+                Callback = function()
+                        Config.GenSkillCheckMode = "Neutral"
+                        WindUI:Notify({ Title = "SkillCheck", Content = "Mode: Neutral" })
+                end,
+        })
+end)
 
 TabAuto:Button({
         Title = "Boost All Gen (Group Project)",
@@ -929,6 +926,7 @@ TabAuto:Section({
         Desc = "Instant Escape dan Self UnHook 100%",
         Icon = "solar:exit-bold",
         IconThemed = true,
+        Opened = true,
 })
 
 TabAuto:Button({
@@ -1752,7 +1750,7 @@ end)
 --  CONSOLE LOG
 -- ═══════════════════════════════════════════════════════════════════════
 
-print("╔══════════════════════════════════════════════════╗")
+print("╔══════════════════════════════════════════════════════════════╗")
 print("║   VIOLENCE DISTRICT HUB — WINDUI EDITION        ║")
 print("║                                                   ║")
 print("║  Keybinds:                                        ║")
