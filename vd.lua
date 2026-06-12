@@ -237,7 +237,7 @@ end
 local VersionSC = "VIP"
 
 local Window = WindUI:CreateWindow({
-	Title = "Violence District '" .. VersionSC .. "'",
+	Title = "Violence District " .. VersionSC .. "",
 	Author = "by Zetttify",
 	Icon = "solar:compass-big-bold",
 	Theme = "Dark",
