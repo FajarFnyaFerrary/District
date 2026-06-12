@@ -31,9 +31,9 @@ end
 local ThemeName = "Dark"
 
 local Window = WindUI:CreateWindow({
-	Title = "Theme '" .. ThemeName .. "'",
-	Author = "by .ftgs",
-	Icon = "solar:compass-big-bold",
+	Title = "Violence District | ",
+	Author = "by Zeetttify",
+	Icon = "solar:shield-keyhole-bold",
 	Theme = ThemeName,
 	NewElements = true,
 	Transparent = true,
