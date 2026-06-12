@@ -173,8 +173,8 @@ end
 local ThemeName = "Dark"
 
 local Window = WindUI:CreateWindow({
-	Title = "District Premium Menu",
-	Author = "by .ftgs & Fajar",
+	Title = "Violence District | ",
+	Author = "by Zeetttify",
 	Icon = "solar:crown-bold",
 	Theme = ThemeName,
 	NewElements = true,
