@@ -29,10 +29,10 @@ end
 
 --WindUI.TransparencyValue = .9
 local ThemeName = "Dark"
-local VersionSC = "VIP"
+
 local Window = WindUI:CreateWindow({
-	Title = "Violence District '" .. VersionSC .. "'",
-	Author = "by Zetttify",
+	Title = "Theme '" .. ThemeName .. "'",
+	Author = "by .ftgs",
 	Icon = "solar:compass-big-bold",
 	Theme = ThemeName,
 	NewElements = true,
@@ -40,23 +40,19 @@ local Window = WindUI:CreateWindow({
 	ToggleKey = Enum.KeyCode.F,
 	Acrylic = true,
 
+	--[[
 	KeySystem = {
-		Note = "Please login using your key.",
-		API = {
-			{
-				Type = "platoboost",
-				ServiceId = 26195,
-				Secret = "8d7de7ed-e9d3-47ab-a6ee-911d31ef4647",
-			},
-		},
-		SaveKey = false,
+		Title = "Key System",
+		Description = "Enter the correct key to unlock the window",
+		KeyValidator = function(key)
+			return key == "HelloWorld"
+		end,
 	}
+	]]
 })
 
 local Tag = Window:Tag({
-	Title = "PREMIUM",
-	Icon = "sfsymbols:printerFill",
-	IconSize = 22,
+	Title = "Hi my tag",
 	Color = "Text",
 })
 
