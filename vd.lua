@@ -49,6 +49,17 @@ local Window = WindUI:CreateWindow({
 	Transparent = true,
 	ToggleKey = Enum.KeyCode.RightControl,
 	Acrylic = true,
+	KeySystem = {
+		Note = "Please login using your key.",
+		API = {
+			{
+				Type = "platoboost",
+				ServiceId = 26195,
+				Secret = "8d7de7ed-e9d3-47ab-a6ee-911d31ef4647",
+			},
+		},
+		SaveKey = false,
+	},
 })
 
 local Tag = Window:Tag({
