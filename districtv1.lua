@@ -151,7 +151,7 @@ _G.AimRadius = 150
 _G.AimCircleVisible = true
 
 -- ==========================================
--- WINDUI INITIALIZATION
+-- WINDUI INITIALIZATION (FIXED FOR EXECUTOR)
 -- ==========================================
 local WindUI
 do
@@ -162,8 +162,10 @@ do
 	if ok then
 		WindUI = result
 	else
-		if RunService:IsStudio() or not writefile then
-			WindUI = require(ReplicatedStorage:WaitForChild("WindUI"):WaitForChild("Init"))
+		-- Memperbaiki infinite yield jika writefile tidak ada di executor
+		local rsWind = ReplicatedStorage:FindFirstChild("WindUI")
+		if rsWind then
+			WindUI = require(rsWind:WaitForChild("Init"))
 		else
 			WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/FajarFnyaFerrary/District/main/dist/main.lua"))()
 		end
@@ -173,9 +175,9 @@ end
 local ThemeName = "Dark"
 
 local Window = WindUI:CreateWindow({
-	Title = "Violence District | ", -- Akan otomatis ditambahkan "👑 VIP" atau "👤 Free" setelah login
+	Title = "Violence District | ",
 	Author = "by Zeetttify",
-	Icon = "solar:shield-keyhole-bold", -- Rekomendasi ikon netral saat UI KeySystem muncul
+	Icon = "solar:shield-keyhole-bold",
 	Theme = ThemeName,
 	NewElements = true,
 	Transparent = true,
@@ -793,7 +795,8 @@ TabSettings:Section({
 TabSettings:Space({ Columns = 2 })
 
 local CachedPRData = {}
-local Remote = ReplicatedStorage:WaitForChild("GetPullRequestData")
+-- FIXED: Menggunakan FindFirstChild agar tidak terjadi Infinite Yield di Executor!
+local Remote = ReplicatedStorage:FindFirstChild("GetPullRequestData")
 
 TabSettings:Dropdown({
 	Title = "Select Theme",
@@ -811,7 +814,9 @@ TabSettings:Dropdown({
 		local PRNumber = WindUI.Themes[ThemeName]
 			and WindUI.Themes[ThemeName].Metadata
 			and WindUI.Themes[ThemeName].Metadata.PullRequest
-		if PRNumber then
+			
+		-- Hanya panggil Remote jika terdeteksi di dalam Game Server
+		if PRNumber and Remote then
 			Window:SetAuthor("Loading...")
 			if not CachedPRData[PRNumber] then
 				local Success, Data = pcall(function()
@@ -1384,13 +1389,6 @@ task.spawn(function()
 			for _, obj in ipairs(char:GetDescendants()) do
 				if obj:IsA("Sound") and (obj.Name:lower():find("footstep") or obj.Name:lower():find("run") or obj.Name:lower():find("step")) then
 					obj.Volume = 0
-				end
-			end
-
-			-- Suppress noise remotes
-			for _, remote in ipairs(ReplicatedStorage:GetDescendants()) do
-				if remote:IsA("RemoteEvent") and (remote.Name:lower():find("noise") or remote.Name:lower():find("sound") or remote.Name:lower():find("alert")) then
-					-- Hook oldnameccall to prevent noise events
 				end
 			end
 		end)
