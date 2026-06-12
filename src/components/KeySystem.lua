@@ -88,7 +88,34 @@ function KeySystem.new(Config, Filename, func, keyValidator)
 
 	local InputFrame = CreateInput("Enter Key", "key", nil, "Input", function(k)
 		EnteredKey = k
+
+		-- Logika deteksi otomatis untuk VIP dan Free
+		if k:match("^KEY_") then
+			Title.Text = "VIP Key"
+			-- Ganti icon ke versi VIP (sesuaikan string icon dengan library WindUI-mu, misal: crown)
+			if IconFrame then
+				-- Jika WindUI menggunakan sistem asset id atau nama icon:
+				-- IconFrame.Image = "rbxassetid://ID_GAMBAR_VIP" 
+				-- Atau biarkan jika library memiliki fungsi update icon tersendiri
+			end
+		elseif k:match("^FREE_") then
+			Title.Text = "Free Key"
+			-- Ganti icon ke versi Free (misal: user atau key biasa)
+			if IconFrame then
+				-- IconFrame.Image = "rbxassetid://ID_GAMBAR_FREE"
+			end
+		else
+			-- Reset ke Title dan Icon default jika input kosong atau tidak cocok
+			Title.Text = Config.KeySystem.Title or Config.Title
+			if IconFrame and Config.Icon then
+				-- IconFrame.Image = "rbxassetid://ID_GAMBAR_DEFAULT"
+			end
+		end
 	end)
+	
+	--[[local InputFrame = CreateInput("Enter Key", "key", nil, "Input", function(k)
+		EnteredKey = k
+	end)]]--
 
 	local NoteText
 	if Config.KeySystem.Note and Config.KeySystem.Note ~= "" then
@@ -426,10 +453,50 @@ function KeySystem.new(Config, Filename, func, keyValidator)
 
 	local function handleSuccess(key)
 		KeyDialog:Close()()
-		writefile((Config.Folder or "Temp") .. "/" .. Filename .. ".key", tostring(key))
+		
+		-- Deteksi tipe key untuk menentukan tambahan Title dan Icon
+		local appendedText = ""
+		local updatedIcon = "solar:crown-bold" -- Ikon default
+
+		if key:match("^KEY_") then
+			appendedText = "👑 VIP"
+			updatedIcon = "solar:crown-bold"
+		elseif key:match("^FREE_") then
+			appendedText = "👤 Free"
+			updatedIcon = "solar:user-bold"
+		end
+
+		-- Update Title pada Window Utama
+		local originalTitle = Config.Title or ""
+		local finalTitle = originalTitle .. appendedText
+
+		-- Coba perbarui antarmuka menggunakan metode bawaan WindUI
+		if Config.Window.SetTitle then
+			Config.Window:SetTitle(finalTitle)
+		elseif Config.Window.Elements and Config.Window.Elements.Title then
+			-- Fallback jika perlu memodifikasi TextLabel secara langsung
+			Config.Window.Elements.Title.Text = finalTitle
+		end
+
+		-- Update Icon pada Window Utama
+		if Config.Window.SetIcon then
+			Config.Window:SetIcon(updatedIcon)
+		end
+
+		-- Memperbaiki logika SaveKey agar sejalan dengan konfigurasi pengguna
+		if Config.KeySystem.SaveKey then
+			writefile((Config.Folder or "Temp") .. "/" .. Filename .. ".key", tostring(key))
+		end
+		
 		task.wait(0.4)
 		func(true)
 	end
+	--[[local function handleSuccess(key)
+		KeyDialog:Close()()
+		writefile((Config.Folder or "Temp") .. "/" .. Filename .. ".key", tostring(key))
+		task.wait(0.4)
+		func(true)
+	end]]--
 
 	local SubmitButton = CreateButton("Submit", "arrow-right", function()
 		local key = tostring(EnteredKey or "empty")
