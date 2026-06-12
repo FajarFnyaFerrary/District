@@ -245,6 +245,20 @@ local Window = WindUI:CreateWindow({
 	Transparent = true,
 	ToggleKey = Enum.KeyCode.RightControl,
 	Acrylic = true,
+	OpenButton = {
+		Title = "OPEN MENU",
+		CornerRadius = UDim.new(1, 0),
+		StrokeThickness = 3,
+		Enabled = true,
+		Draggable = true,
+		OnlyMobile = false,
+		Scale = 0.5,
+		Color = ColorSequence.new(
+			Color3.fromHex("#30FF6A"),
+			Color3.fromHex("#e7ff2f")
+		),
+	},
+
 	KeySystem = {
 		Note = "Please login using your key.",
 		API = {
@@ -255,6 +269,11 @@ local Window = WindUI:CreateWindow({
 			},
 		},
 		SaveKey = false,
+	},
+
+	Topbar = {
+		Height = 44,
+		ButtonsType = "Mac",
 	},
 })
 
