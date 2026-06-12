@@ -173,14 +173,26 @@ end
 local ThemeName = "Dark"
 
 local Window = WindUI:CreateWindow({
-	Title = "Violence District | ",
+	Title = "Violence District | ", -- Akan otomatis ditambahkan "👑 VIP" atau "👤 Free" setelah login
 	Author = "by Zeetttify",
-	Icon = "solar:crown-bold",
+	Icon = "solar:shield-keyhole-bold", -- Rekomendasi ikon netral saat UI KeySystem muncul
 	Theme = ThemeName,
 	NewElements = true,
 	Transparent = true,
 	ToggleKey = Enum.KeyCode.F,
 	Acrylic = true,
+	
+	KeySystem = {
+		Note = "Please login using your key.",
+		API = {
+			{
+				Type = "platoboost",
+				ServiceId = 26195,
+				Secret = "8d7de7ed-e9d3-47ab-a6ee-911d31ef4647",
+			},
+		},
+		SaveKey = false,
+	}
 })
 
 -- ==========================================
