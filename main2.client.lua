@@ -57,7 +57,7 @@ local ThemeName = "Dark"
 
 local Window = WindUI:CreateWindow({
     Title = "Violence District",
-    Author = "v4.0 | WindUI",
+    Author = "By Zetttify",
     Icon = "solar:skull-bold",
     Theme = ThemeName,
     NewElements = true,
