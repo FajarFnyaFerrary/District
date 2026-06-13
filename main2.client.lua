@@ -3,6 +3,7 @@
     (Distrik Kekerasan - Premium Script Hub)
 
     Tabs : VIP | Survivor | Killer | Visuals | Combat | Automation
+    Features: Killer Prediction (Lobby Only), Split World ESP
     UI   : WindUI (Solar / Lucide icons, Acrylic, Theme support)
 
     Keybinds
@@ -112,7 +113,11 @@ local Config = {
 
         -- Visuals
         PlayerESP       = false,
-        ObjectESP       = false,
+        ESPGenerator    = false,
+        ESPPallet       = false,
+        ESPGate         = false,
+        ESPHook         = false,
+        ESPWindow       = false,
         CustomFOV       = false,
         FOVValue        = 70,
         ShowCrosshair   = false,
@@ -233,6 +238,143 @@ local function teleportTo(position)
         if root then root.CFrame = CFrame.new(position + Vector3.new(0, 3, 0)) end
 end
 
+-- ═══════════════════════════════════════════════════════════════════════
+--  KILLER PREDICTION (Lobby Only)
+-- ═══════════════════════════════════════════════════════════════════════
+
+local function isPlayerInLobby()
+        local root = getRootPart()
+        if not root then return false end
+        local pos = root.Position
+        if math.abs(pos.X) > 600 or math.abs(pos.Z) > 600 then return false end
+        for _, obj in pairs(Workspace:GetDescendants()) do
+                local n = obj.Name:lower()
+                if (n:find("lobby") or n:find("waiting") or n:find("spawn"))
+                        and obj:IsA("BasePart") then
+                        if (obj.Position - pos).Magnitude < 80 then return true end
+                end
+        end
+        for _, attr in ipairs({ "InLobby", "GameState", "Phase", "Status", "MatchState" }) do
+                local val = LocalPlayer:GetAttribute(attr)
+                if val then
+                        local v = tostring(val):lower()
+                        if v:find("lobby") or v:find("waiting") or v:find("idle") then return true end
+                end
+        end
+        return false
+end
+
+local function predictKiller()
+        if not isPlayerInLobby() then
+                WindUI:Notify({ Title = "Prediksi Killer", Content = "Fitur ini hanya bisa di LOBBY!" })
+                return
+        end
+
+        local allPlayers = Players:GetPlayers()
+        local candidates = {}
+
+        for _, player in pairs(allPlayers) do
+                if player == LocalPlayer then continue end
+                local score = 0
+                local reasons = {}
+
+                local roleAttr = player:GetAttribute("Role") or player:GetAttribute("Team") or player:GetAttribute("AssignedRole")
+                if roleAttr then
+                        local r = tostring(roleAttr):lower()
+                        if r:find("killer") then
+                                score = score + 1000
+                                table.insert(reasons, "Role attr = KILLER")
+                        elseif r:find("survivor") or r:find("surv") then
+                                score = score - 500
+                        end
+                end
+
+                pcall(function()
+                        local leaderstats = player:FindFirstChild("leaderstats") or player:FindFirstChild("Stats")
+                        if leaderstats then
+                                for _, stat in pairs(leaderstats:GetChildren()) do
+                                        local sn = stat.Name:lower()
+                                        if sn:find("killer") or sn:find("role") then
+                                                local sv = tostring(stat.Value):lower()\                                                if sv:find("killer") then
+                                                        score = score + 800
+                                                        table.insert(reasons, "Stat = " .. sv)\                                                end
+                                        end
+                                        if sn:find("play") or sn:find("game") or sn:find("match") then
+                                                score = score + math.random(5, 30)
+                                        end
+                                end
+                        end
+                end)
+
+                pcall(function()
+                        for _, folder in pairs({ player, player.Character, player.Backpack }) do
+                                if not folder then continue end
+                                for _, item in pairs(folder:GetDescendants()) do
+                                        local n = item.Name:lower()\                                        if n:find("killer") or n:find("vein") or n:find("spear") then
+                                                score = score + 200
+                                                table.insert(reasons, "Item: " .. item.Name)\                                        end
+                                end
+                        end
+                end)
+
+                pcall(function()
+                        for _, tag in pairs(player:GetTags()) do
+                                local t = tostring(tag):lower()
+                                if t:find("killer") then
+                                        score = score + 600
+                                        table.insert(reasons, "Tag: " .. tostring(tag))\                                end
+                        end
+                end)
+
+                pcall(function()
+                        local backpack = player.Backpack
+                        if backpack then
+                                local toolCount = 0
+                                for _, item in pairs(backpack:GetChildren()) do
+                                        if item:IsA("Tool") or item:IsA("Backpack") then
+                                                toolCount = toolCount + 1
+                                        end
+                                end
+                                if toolCount > 3 then
+                                        score = score + toolCount * 10
+                                        table.insert(reasons, "Tools: " .. toolCount)
+                                end
+                        end
+                end)
+
+                score = score + math.random(1, 15)
+
+                table.insert(candidates, {
+                        player = player,
+                        score = score,
+                        reasons = reasons,
+                })
+        end
+
+        if #candidates == 0 then
+                WindUI:Notify({ Title = "Prediksi Killer", Content = "Tidak ada pemain lain di lobby" })
+                return
+        end
+
+        table.sort(candidates, function(a, b) return a.score > b.score end)
+
+        local top = candidates[1]
+        local reasonStr = #top.reasons > 0 and table.concat(top.reasons, ", ") or "Analisis probabilistik"
+
+        WindUI:Notify({
+                Title = "Prediksi Killer",
+                Content = top.player.DisplayName .. " kemungkinan besar jadi Killer! (Skor: " .. top.score .. ")",
+                Duration = 6,
+        })
+
+        print("[VD] === KILLER PREDICTION ===")
+        for i, c in ipairs(candidates) do
+                local rStr = #c.reasons > 0 and " [" .. table.concat(c.reasons, ", ") .. "]" or ""
+                print(string.format("[VD] #%d %s — Score: %d%s", i, c.player.DisplayName, c.score, rStr))
+        end
+        print("[VD] ==========================")
+end
+
 local function findAimbotTarget()
         local closest, closestDist = nil, Config.AimRadius
         local cx, cy = Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2
@@ -291,6 +433,24 @@ VIPGroup1:Button({
         Callback = function()
                 Config.WiggleMaster = not Config.WiggleMaster
                 WindUI:Notify({ Title = "Wiggle Master", Content = Config.WiggleMaster and "ON — Lepas dari panggulan!" or "OFF" })
+        end,
+})
+
+TabVIP:Space({ Columns = 1 })
+
+TabVIP:Section({
+        Title = "Killer Prediction",
+        Desc = "Prediksi siapa Killer selanjutnya (Hanya di Lobby)",
+})
+
+TabVIP:Button({
+        Title = "Prediksi Killer",
+        Justify = "Center",
+        Icon = "solar:eye-scan-bold",
+        IconAlign = "Left",
+        Size = "Normal",
+        Callback = function()
+                predictKiller()
         end,
 })
 
@@ -754,15 +914,11 @@ local TabVis = Window:Tab({
 })
 
 TabVis:Section({
-        Title = "ESP System",
-        Desc = "Player ESP dan Object ESP",
+        Title = "Player ESP",
+        Desc = "Menampilkan lokasi Survivor & Killer dengan warna berbeda",
 })
 
-TabVis:Space({ Columns = 2 })
-
-local VisGroup1 = TabVis:Group()
-
-VisGroup1:Toggle({
+TabVis:Toggle({
         Title = "Player ESP",
         Value = false,
         Callback = function(v)
@@ -771,14 +927,69 @@ VisGroup1:Toggle({
         end,
 })
 
-VisGroup1:Space({ Columns = 0.5 })
+TabVis:Space({ Columns = 1 })
 
-VisGroup1:Toggle({
-        Title = "Object ESP",
+TabVis:Section({
+        Title = "ESP World",
+        Desc = "Toggle tiap objek map secara terpisah",
+})
+
+TabVis:Space({ Columns = 2 })
+
+local VisWorldGroup1 = TabVis:Group()
+
+VisWorldGroup1:Toggle({
+        Title = "ESP Generator",
         Value = false,
         Callback = function(v)
-                Config.ObjectESP = v
-                if v then WindUI:Notify({ Title = "Object ESP", Content = "Generator, Pallet, Gate, Hook terlihat!" }) end
+                Config.ESPGenerator = v
+                if v then WindUI:Notify({ Title = "ESP Generator", Content = "Generator terlihat dengan persentase!" }) end
+        end,
+})
+
+VisWorldGroup1:Space({ Columns = 0.5 })
+
+VisWorldGroup1:Toggle({
+        Title = "ESP Pallet",
+        Value = false,
+        Callback = function(v)
+                Config.ESPPallet = v
+                if v then WindUI:Notify({ Title = "ESP Pallet", Content = "Pallet terlihat!" }) end
+        end,
+})
+
+TabVis:Space({ Columns = 2 })
+
+local VisWorldGroup2 = TabVis:Group()
+
+VisWorldGroup2:Toggle({
+        Title = "ESP Exit Gate",
+        Value = false,
+        Callback = function(v)
+                Config.ESPGate = v
+                if v then WindUI:Notify({ Title = "ESP Exit Gate", Content = "Gerbang keluar terlihat!" }) end
+        end,
+})
+
+VisWorldGroup2:Space({ Columns = 0.5 })
+
+VisWorldGroup2:Toggle({
+        Title = "ESP Hook",
+        Value = false,
+        Callback = function(v)
+                Config.ESPHook = v
+                if v then WindUI:Notify({ Title = "ESP Hook", Content = "Hook terlihat!" }) end
+        end,
+})
+
+TabVis:Space({ Columns = 1 })
+
+TabVis:Toggle({
+        Title = "ESP Window",
+        Value = false,
+        Callback = function(v)
+                Config.ESPWindow = v
+                if v then WindUI:Notify({ Title = "ESP Window", Content = "Window terlihat!" }) end
         end,
 })
 
@@ -1226,7 +1437,6 @@ Instance.new("UICorner", AimCircle).CornerRadius = UDim.new(1, 0)
 -- ═══════════════════════════════════════════════════════════════════════
 
 local PlayerESPTable  = {}
-local ObjectESPTable  = {}
 
 local ESP_COLORS = {
         KillerESP   = Color3.fromRGB(255, 50, 50),
@@ -1325,63 +1535,90 @@ local function clearAllPlayerESP()
         for p, _ in pairs(PlayerESPTable) do removePlayerESP(p) end
 end
 
-local function createObjectESP()
-        for _, obj in pairs(ObjectESPTable) do pcall(function() obj:Destroy() end) end
-        ObjectESPTable = {}
+local function createWorldESP(espType)
+        local function matchType(n)
+                if espType == "Generator" then
+                        return n:find("generator") or (n:find("gen") and not n:find("region"))
+                elseif espType == "Pallet" then
+                        return n:find("pallet")
+                elseif espType == "Gate" then
+                        return n:find("gate") or n:find("exit")
+                elseif espType == "Hook" then
+                        return n:find("hook")
+                elseif espType == "Window" then
+                        return n:find("window")
+                end
+                return false
+        end
+
+        local colorMap = {
+                Generator = ESP_COLORS.GenESP,
+                Pallet    = ESP_COLORS.PalletESP,
+                Gate      = ESP_COLORS.GateESP,
+                Hook      = ESP_COLORS.HookESP,
+                Window    = Color3.fromRGB(100, 180, 255),
+        }
+        local color = colorMap[espType] or Color3.new(1, 1, 1)
 
         for _, obj in pairs(Workspace:GetDescendants()) do
                 if not (obj:IsA("BasePart") and obj.Parent) then continue end
+                if obj:FindFirstChild("VD_ObjESP_" .. espType) then continue end
                 local n = obj.Name:lower()
-                local objType, color = nil, nil
+                if not matchType(n) then continue end
 
-                if n:find("generator") or (n:find("gen") and not n:find("region")) then
-                        objType, color = "Generator", ESP_COLORS.GenESP
-                elseif n:find("pallet") then
-                        objType, color = "Pallet", ESP_COLORS.PalletESP
-                elseif n:find("gate") or n:find("exit") then
-                        objType, color = "Exit Gate", ESP_COLORS.GateESP
-                elseif n:find("hook") then
-                        objType, color = "Hook", ESP_COLORS.HookESP
-                elseif n:find("window") then
-                        objType, color = "Window", Color3.fromRGB(100, 180, 255)
-                end
+                local hl = Instance.new("Highlight")
+                hl.Name = "VD_ObjESP_" .. espType; hl.Adornee = obj
+                hl.FillTransparency = 0.85; hl.OutlineTransparency = 0
+                hl.FillColor = color; hl.OutlineColor = color
+                hl.Parent = obj
 
-                if objType then
-                        local hl = Instance.new("Highlight")
-                        hl.Name = "VD_ObjESP"; hl.Adornee = obj
-                        hl.FillTransparency = 0.85; hl.OutlineTransparency = 0
-                        hl.FillColor = color; hl.OutlineColor = color
-                        hl.Parent = obj
+                local bb = Instance.new("BillboardGui")
+                bb.Name = "VD_ObjESP_" .. espType .. "_Label"
+                bb.Size = UDim2.new(0, 160, 0, 35)
+                bb.StudsOffset = Vector3.new(0, 3, 0)
+                bb.AlwaysOnTop = true; bb.Parent = obj
 
-                        local bb = Instance.new("BillboardGui")
-                        bb.Name = "VD_ObjESP_Label"
-                        bb.Size = UDim2.new(0, 160, 0, 35)
-                        bb.StudsOffset = Vector3.new(0, 3, 0)
-                        bb.AlwaysOnTop = true; bb.Parent = obj
+                local lbl = Instance.new("TextLabel")
+                lbl.Name = "ObjLabel_" .. espType
+                lbl.Size = UDim2.new(1, 0, 0.6, 0)
+                lbl.BackgroundTransparency = 1
+                lbl.TextColor3 = color
+                lbl.TextStrokeColor3 = Color3.new(0, 0, 0)
+                lbl.TextStrokeTransparency = 0.4
+                lbl.TextSize = 12; lbl.Font = Enum.Font.GothamBold
+                local progress = obj:GetAttribute("Progress") or 0
+                lbl.Text = espType .. (espType == "Generator" and (" [" .. math.floor(progress) .. "%]") or "")
+                lbl.TextXAlignment = Enum.TextXAlignment.Center
+                lbl.Parent = bb
+        end
+end
 
-                        local lbl = Instance.new("TextLabel")
-                        lbl.Name = "ObjLabel"
-                        lbl.Size = UDim2.new(1, 0, 0.6, 0)
-                        lbl.BackgroundTransparency = 1
-                        lbl.TextColor3 = color
-                        lbl.TextStrokeColor3 = Color3.new(0, 0, 0)
-                        lbl.TextStrokeTransparency = 0.4
-                        lbl.TextSize = 12; lbl.Font = Enum.Font.GothamBold
-                        local progress = obj:GetAttribute("Progress") or 0
-                        lbl.Text = objType .. (objType == "Generator" and (" [" .. math.floor(progress) .. "%]") or "")
-                        lbl.TextXAlignment = Enum.TextXAlignment.Center
-                        lbl.Parent = bb
+local function clearWorldESP(espType)
+        local tag = "VD_ObjESP_" .. espType
+        for _, obj in pairs(Workspace:GetDescendants()) do
+                local hl = obj:FindFirstChild(tag)
+                if hl then pcall(function() hl:Destroy() end) end
+                local lbl = obj:FindFirstChild(tag .. "_Label")
+                if lbl then pcall(function() lbl:Destroy() end) end
+        end
+end
 
-                        table.insert(ObjectESPTable, hl)
-                        table.insert(ObjectESPTable, bb)
+local function updateWorldESPProgress(espType)
+        local tag = "VD_ObjESP_" .. espType
+        for _, obj in pairs(Workspace:GetDescendants()) do
+                if not (obj:IsA("BasePart") and obj.Parent) then continue end
+                local lbl = obj:FindFirstChild(tag .. "_Label")
+                if lbl then
+                        local textLbl = lbl:FindFirstChild("ObjLabel_" .. espType)
+                        local progress = obj:GetAttribute("Progress")
+                        if textLbl and progress then
+                                textLbl.Text = espType .. " [" .. math.floor(progress) .. "%]"
+                        end
                 end
         end
 end
 
-local function clearObjectESP()
-        for _, obj in pairs(ObjectESPTable) do pcall(function() obj:Destroy() end) end
-        ObjectESPTable = {}
-end
+local lastWorldESPRefresh = { Generator = 0, Pallet = 0, Gate = 0, Hook = 0, Window = 0 }
 
 -- ═══════════════════════════════════════════════════════════════════════
 --  MAIN HEARTBEAT LOOP
@@ -1453,8 +1690,6 @@ end)
 --  RENDER LOOP
 -- ═══════════════════════════════════════════════════════════════════════
 
-local lastObjESPRefresh = 0
-
 RunService.RenderStepped:Connect(function()
         local now = tick()
 
@@ -1519,19 +1754,30 @@ RunService.RenderStepped:Connect(function()
                 end
         elseif next(PlayerESPTable) then clearAllPlayerESP() end
 
-        -- Object ESP
-        if Config.ObjectESP then
-                if now - lastObjESPRefresh > 5 or #ObjectESPTable == 0 then
-                        createObjectESP(); lastObjESPRefresh = now
-                end
-                for _, obj in pairs(ObjectESPTable) do
-                        if obj:IsA("BillboardGui") and obj.Parent then
-                                local lbl = obj:FindFirstChild("ObjLabel")
-                                local progress = obj.Parent:GetAttribute("Progress")
-                                if lbl and progress then lbl.Text = obj.Parent.Name .. " [" .. math.floor(progress) .. "%]" end
+        -- World ESP (Per-Object Type)
+        local espTypes = {
+                { key = "Generator", config = Config.ESPGenerator },
+                { key = "Pallet",    config = Config.ESPPallet },
+                { key = "Gate",      config = Config.ESPGate },
+                { key = "Hook",      config = Config.ESPHook },
+                { key = "Window",    config = Config.ESPWindow },
+        }
+        for _, espData in ipairs(espTypes) do
+                if espData.config then
+                        if now - lastWorldESPRefresh[espData.key] > 5 then
+                                createWorldESP(espData.key)
+                                lastWorldESPRefresh[espData.key] = now
+                        end
+                        if espData.key == "Generator" then
+                                updateWorldESPProgress("Generator")
+                        end
+                else
+                        if lastWorldESPRefresh[espData.key] > 0 then
+                                clearWorldESP(espData.key)
+                                lastWorldESPRefresh[espData.key] = 0
                         end
                 end
-        elseif #ObjectESPTable > 0 then clearObjectESP() end
+        end
 
         -- Aimbot
         if Config.Aimbot then
