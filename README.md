@@ -122,7 +122,7 @@
 ### Metode 2 — LoadString
 
 ```luau
-loadstring(game:HttpGet('https://raw.githubusercontent.com/USERNAME/REPO-NAME/refs/heads/main/ViolenceDistrictHub.lua'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/FajarFnyaFerrary/District/refs/heads/main/main_example.lua'))()
 ```
 
 > Ganti `USERNAME/REPO-NAME` dengan username GitHub dan nama repository kamu.
