@@ -574,7 +574,8 @@ end)
 -- SECTION 4: BUILD WINDUI - TABS & ELEMENTS
 -- ============================================
 local Tag = Window:Tag({
-    Title = "Violence District v4.0",
+    Title = "PREMIUM",
+    Icon = "solar:star-regular",
     Color = "Text",
 })
 
