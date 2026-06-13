@@ -172,11 +172,11 @@ ViolenceDistrictHub.lua
 
 ## Credits
 
-- **WindUI** — [Footagesus](https://github.com/Footagesus) ([Repository](https://github.com/FajarFnyaFerrary/District))
+- **WindUI** — [Footagesus](https://github.com/Footagesus)
 - <img src="docs/WindUI – Themes.png" alt="WindUI Banner">
 - [![Wind Ui](https://uibin.orqan.xyz/api/card?id=341a345c-b3c9-42fe-a45c-eb296580ce61&theme=green)](https://uibin.orqan.xyz/library/341a345c-b3c9-42fe-a45c-eb296580ce61)
 - **Icons** — [Lucide](https://github.com/lucide-icons/lucide), [Solar Icons](https://icones.js.org/collection/solar), [SF Symbols](https://sf-symbols-one.vercel.app/), [Craft Icons](https://www.figma.com/community/file/1415718327120418204), [Geist Icons](https://vercel.com/geist/icons)
-- **Script** — Zetttify
+- **Script** — [Zetttify](https://github.com/FajarFnyaFerrary) ([Repository](https://github.com/FajarFnyaFerrary/District))
 
 ## Disclaimer
 
