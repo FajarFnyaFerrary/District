@@ -277,7 +277,7 @@ TabVIP:Section({
 	Desc = "Bot cerdas pencari Generator, Auto Parry, dan Wiggle Master",
 })
 
-TabVIP:Space({ Columns = 2 })
+TabVIP:Space({ Columns = 1 })
 
 local VIPGroup1 = TabVIP:Group()
 
@@ -443,7 +443,7 @@ TabSurv:Section({
 	Desc = "Reset state karakter dan bergerak tanpa suara",
 })
 
-TabSurv:Space({ Columns = 2 })
+TabSurv:Space({ Columns = 1 })
 
 local SurvGroup1 = TabSurv:Group()
 
@@ -509,7 +509,7 @@ TabSurv:Toggle({
 	end,
 })
 
-TabSurv:Space({ Columns = 2 })
+TabSurv:Space({ Columns = 1 })
 
 local SurvGroup2 = TabSurv:Group()
 
@@ -594,7 +594,7 @@ TabKill:Section({
 	Desc = "Modifikasi tombak: Aimbot prediksi & No Gravity",
 })
 
-TabKill:Space({ Columns = 2 })
+TabKill:Space({ Columns = 1 })
 
 local KillGroup1 = TabKill:Group()
 
@@ -625,7 +625,7 @@ TabKill:Section({
 	Desc = "Anti-Blind dan Anti-Stun",
 })
 
-TabKill:Space({ Columns = 2 })
+TabKill:Space({ Columns = 1 })
 
 local KillGroup2 = TabKill:Group()
 
@@ -725,7 +725,7 @@ TabVis:Section({
 	Desc = "Player ESP dan Object ESP",
 })
 
-TabVis:Space({ Columns = 2 })
+TabVis:Space({ Columns = 1 })
 
 local VisGroup1 = TabVis:Group()
 
@@ -806,7 +806,7 @@ TabVis:Toggle({
 	end,
 })
 
-TabVis:Space({ Columns = 2 })
+TabVis:Space({ Columns = 1 })
 
 local VisGroup2 = TabVis:Group()
 
@@ -896,7 +896,7 @@ TabComb:Section({
 	Desc = "Tracer dan Highlight target",
 })
 
-TabComb:Space({ Columns = 2 })
+TabComb:Space({ Columns = 1 })
 
 local CombGroup1 = TabComb:Group()
 
@@ -925,7 +925,7 @@ TabComb:Section({
 	Desc = "FPP/TPP, Expand Hitbox, Auto Attack",
 })
 
-TabComb:Space({ Columns = 2 })
+TabComb:Space({ Columns = 1 })
 
 local CombGroup2 = TabComb:Group()
 
@@ -1032,7 +1032,7 @@ TabAuto:Toggle({
 	end,
 })
 
-TabAuto:Space({ Columns = 2 })
+TabAuto:Space({ Columns = 1 })
 
 local AutoGroup1 = TabAuto:Group()
 
@@ -1069,7 +1069,7 @@ TabAuto:Section({
 	Desc = "Instant Escape dan Self UnHook 100%",
 })
 
-TabAuto:Space({ Columns = 2 })
+TabAuto:Space({ Columns = 1 })
 
 local AutoGroup2 = TabAuto:Group()
 
