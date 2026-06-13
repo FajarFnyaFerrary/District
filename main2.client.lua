@@ -295,9 +295,11 @@ local function predictKiller()
                                 for _, stat in pairs(leaderstats:GetChildren()) do
                                         local sn = stat.Name:lower()
                                         if sn:find("killer") or sn:find("role") then
-                                                local sv = tostring(stat.Value):lower()\                                                if sv:find("killer") then
+                                                local sv = tostring(stat.Value):lower()
+                                                if sv:find("killer") then
                                                         score = score + 800
-                                                        table.insert(reasons, "Stat = " .. sv)\                                                end
+                                                        table.insert(reasons, "Stat = " .. sv)
+                                                end
                                         end
                                         if sn:find("play") or sn:find("game") or sn:find("match") then
                                                 score = score + math.random(5, 30)
@@ -310,9 +312,11 @@ local function predictKiller()
                         for _, folder in pairs({ player, player.Character, player.Backpack }) do
                                 if not folder then continue end
                                 for _, item in pairs(folder:GetDescendants()) do
-                                        local n = item.Name:lower()\                                        if n:find("killer") or n:find("vein") or n:find("spear") then
+                                        local n = item.Name:lower()
+                                        if n:find("killer") or n:find("vein") or n:find("spear") then
                                                 score = score + 200
-                                                table.insert(reasons, "Item: " .. item.Name)\                                        end
+                                                table.insert(reasons, "Item: " .. item.Name)
+                                        end
                                 end
                         end
                 end)
@@ -322,7 +326,8 @@ local function predictKiller()
                                 local t = tostring(tag):lower()
                                 if t:find("killer") then
                                         score = score + 600
-                                        table.insert(reasons, "Tag: " .. tostring(tag))\                                end
+                                        table.insert(reasons, "Tag: " .. tostring(tag))
+                                end
                         end
                 end)
 
