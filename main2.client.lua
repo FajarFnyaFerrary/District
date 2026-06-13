@@ -164,7 +164,7 @@ local function findRemotes(patterns)
         local results, checked = {}, {}
         for _, src in ipairs({ ReplicatedStorage, Workspace }) do
                 for _, obj in pairs(src:GetDescendants()) do
-                        if obj:IsA("RemoteEvent") and not checked[obj] then
+                        if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and not checked[obj] then
                                 for _, pat in ipairs(patterns) do
                                         if obj.Name:lower():find(pat:lower()) then
                                                 table.insert(results, obj)
@@ -178,23 +178,94 @@ local function findRemotes(patterns)
         return results
 end
 
-local function isPlayerKiller(player)
-        if not player or not player.Character then return false end
-        local role = player:GetAttribute("Role") or player:GetAttribute("Team")
-        if role == "Killer" then return true end
-        if player.Team and player.Team.Name:lower():find("killer") then return true end
-
-        local function scan(parent)
-                for _, item in pairs(parent:GetDescendants()) do
-                        local n = item.Name:lower()
-                        if n:find("killer") or n:find("vein") or n:find("spear") or n:find("weapon") then
-                                return true
+-- Find generator Model objects (bukan BasePart) — generator = Model "Generator" + anak "GeneratorPoint"
+local function findAllGenerators()
+        local generators = {}
+        local map = Workspace:FindFirstChild("Map") or Workspace
+        for _, obj in pairs(map:GetDescendants()) do
+                if obj:IsA("Model") and obj.Name == "Generator" then
+                        local genPart = obj:FindFirstChildWhichIsA("BasePart")
+                        if genPart then
+                                table.insert(generators, {
+                                        model = obj,
+                                        part = genPart,
+                                        position = genPart.Position,
+                                })
                         end
                 end
-                return false
         end
-        if scan(player.Character) then return true end
-        if player.Backpack and scan(player.Backpack) then return true end
+        return generators
+end
+
+local function getGeneratorRemotes()
+        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+        if not remotes then return nil, nil end
+        local genFolder = remotes:FindFirstChild("Generator")
+        if not genFolder then return nil, nil end
+        local repairEvent = genFolder:FindFirstChild("RepairEvent")
+        local skillCheckEvent = genFolder:FindFirstChild("SkillCheckResultEvent")
+        -- Also try direct children if nested structure not found
+        if not repairEvent then
+                for _, child in pairs(genFolder:GetDescendants()) do
+                        if child.Name:find("Repair") and (child:IsA("RemoteEvent") or child:IsA("RemoteFunction")) then
+                                repairEvent = child; break
+                        end
+                end
+        end
+        if not skillCheckEvent then
+                for _, child in pairs(genFolder:GetDescendants()) do
+                        if child.Name:find("SkillCheck") and (child:IsA("RemoteEvent") or child:IsA("RemoteFunction")) then
+                                skillCheckEvent = child; break
+                        end
+                end
+        end
+        return repairEvent, skillCheckEvent
+end
+
+local function isPlayerKiller(player)
+        if not player then return false end
+
+        -- Priority 1: Direct role/team attributes (most reliable)
+        local roleAttrs = { "Role", "Team", "AssignedRole", "PlayerRole", "GameRole" }
+        for _, attrName in ipairs(roleAttrs) do
+                local val = player:GetAttribute(attrName)
+                if val and tostring(val):lower():find("killer") then return true end
+        end
+
+        -- Priority 2: Team name
+        if player.Team and player.Team.Name:lower():find("killer") then return true end
+
+        -- Priority 3: Character-level role value (no Character required for this)
+        local char = player.Character
+        if char then
+                local charRole = char:GetAttribute("Role") or char:GetAttribute("Team") or char:GetAttribute("IsKiller")
+                if charRole then
+                        local rv = tostring(charRole):lower()
+                        if rv == "killer" or rv == "true" then return true end
+                end
+
+                -- Priority 4: Scan for killer-specific tools (NARROW match — only actual killer weapon names)
+                local function scanKillerTools(parent)
+                        for _, item in pairs(parent:GetChildren()) do
+                                local n = item.Name:lower()
+                                -- Match only clear killer weapon/tool names, NOT generic words like "weapon"
+                                if item:IsA("Tool") then
+                                        if n:find("killer") or n:find("vein_") or n:find("spear") or n:find("cleaver") or n:find("blade") or n:find("chainsaw") then
+                                                return true
+                                        end
+                                end
+                                -- Also check for BoolValue/StringValue markers that games often use
+                                if (item:IsA("BoolValue") or item:IsA("StringValue")) and item.Name:lower():find("killer") then
+                                        if item:IsA("BoolValue") and item.Value == true then return true end
+                                        if item:IsA("StringValue") and tostring(item.Value):lower():find("killer") then return true end
+                                end
+                        end
+                        return false
+                end
+                if scanKillerTools(char) then return true end
+                if player.Backpack and scanKillerTools(player.Backpack) then return true end
+        end
+
         return false
 end
 
@@ -1348,24 +1419,36 @@ AutoGroup2:Button({
 AutoGroup2:Space({ Columns = 0.5 })
 
 AutoGroup2:Button({
-        Title = "Boost All Gen",
+        Title = "Complete All Gen (Instant)",
         Justify = "Center",
         Icon = "solar:bolt-circle-bold",
         IconAlign = "Left",
         Size = "Small",
         Callback = function()
-                local generators = findPartsByName({ "generator", "gen" })
-                if #generators > 0 then
-                        local remotes = findRemotes({ "Generator", "Progress", "Repair", "Fix" })
-                        for _, gen in pairs(generators) do
-                                gen:SetAttribute("Progress", 100)
-                                for _, remote in pairs(remotes) do
-                                        pcall(function() remote:FireServer(gen, 100) end)
+                local repairEvent, skillCheckEvent = getGeneratorRemotes()
+                if not repairEvent or not skillCheckEvent then
+                        WindUI:Notify({ Title = "Complete Gen", Content = "Generator Remotes tidak ditemukan!" })
+                        return
+                end
+                local completed = 0
+                local generators = findAllGenerators()
+                for _, genData in pairs(generators) do
+                        for _, point in pairs(genData.model:GetChildren()) do
+                                if point.Name:find("GeneratorPoint") then
+                                        pcall(function()
+                                                for i = 1, 10 do
+                                                        repairEvent:FireServer(point, true)
+                                                        skillCheckEvent:FireServer("success", 1, genData.model, point)
+                                                end
+                                                completed = completed + 1
+                                        end)
                                 end
                         end
-                        WindUI:Notify({ Title = "Boost All Gen", Content = #generators .. " generator diproses!" })
+                end
+                if completed > 0 then
+                        WindUI:Notify({ Title = "Complete Gen", Content = completed .. " generator point selesai!" })
                 else
-                        WindUI:Notify({ Title = "Boost All Gen", Content = "Generator tidak ditemukan di map" })
+                        WindUI:Notify({ Title = "Complete Gen", Content = "Generator tidak ditemukan di map" })
                 end
         end,
 })
@@ -1737,6 +1820,18 @@ RunService.RenderStepped:Connect(function()
                                 if player.Character and not PlayerESPTable[player] then createPlayerESP(player) end
                                 local data = PlayerESPTable[player]
                                 if data and player.Character then
+                                        -- Re-check killer role every frame & update visuals if changed
+                                        local nowKiller = isPlayerKiller(player)
+                                        if nowKiller ~= data.isKiller then
+                                                data.isKiller = nowKiller
+                                                local newColor = nowKiller and ESP_COLORS.KillerESP or ESP_COLORS.SurvivorESP
+                                                pcall(function()
+                                                        data.highlight.FillColor = newColor
+                                                        data.highlight.OutlineColor = nowKiller and Color3.fromRGB(255, 80, 80) or Color3.fromRGB(100, 255, 150)
+                                                        data.nameLabel.TextColor3 = newColor
+                                                        data.nameLabel.Text = (nowKiller and "[KILLER] " or "[SURVIVOR] ") .. player.DisplayName
+                                                end)
+                                        end
                                         local tr = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Torso")
                                         local myRoot = getRootPart()
                                         local th = player.Character:FindFirstChildOfClass("Humanoid")
@@ -2088,24 +2183,31 @@ spawn(function()
         end
 end)
 
--- AUTO GENERATOR
+-- AUTO GENERATOR (pakai remote: Remotes > Generator > RepairEvent / SkillCheckResultEvent)
 spawn(function()
-        while wait(0.15) do
+        while wait(0.2) do
                 if not Config.AutoGenerator then continue end
-                local root = getRootPart()
-                if not root then continue end
-                local near = false
-                for _, gen in pairs(findPartsByName({ "generator", "gen" })) do
-                        if (gen.Position - root.Position).Magnitude < 12 then near = true; break end
-                end
-                if near then
-                        for _, r in pairs(findRemotes({ "SkillCheck", "Skill", "Check", "HitZone", "MiniGame" })) do
-                                pcall(function()
-                                        if Config.GenSkillCheckMode == "Perfect" then r:FireServer("Perfect", 1.0)
-                                        else r:FireServer("Neutral", 0.5) end
-                                end)
+                pcall(function()
+                        local repairEvent, skillCheckEvent = getGeneratorRemotes()
+                        if not repairEvent or not skillCheckEvent then return end
+
+                        local map = Workspace:FindFirstChild("Map") or Workspace
+                        for _, obj in pairs(map:GetDescendants()) do
+                                if not Config.AutoGenerator then break end
+                                if obj:IsA("Model") and obj.Name == "Generator" then
+                                        for _, point in pairs(obj:GetChildren()) do
+                                                if point.Name:find("GeneratorPoint") then
+                                                        pcall(function()
+                                                                repairEvent:FireServer(point, true)
+                                                                local result = Config.GenSkillCheckMode == "Perfect" and "success" or "neutral"
+                                                                local value = Config.GenSkillCheckMode == "Perfect" and 1 or 0
+                                                                skillCheckEvent:FireServer(result, value, obj, point)
+                                                        end)
+                                                end
+                                        end
+                                end
                         end
-                end
+                end)
         end
 end)
 
@@ -2131,16 +2233,25 @@ spawn(function()
         end
 end)
 
--- BOOST ALL GEN (Continuous)
+-- BOOST ALL GEN (Continuous) — pakai remote yang benar
 spawn(function()
         while wait(2) do
                 if not Config.BoostAllGen then continue end
-                local gens = findPartsByName({ "generator", "gen" })
-                local rems = findRemotes({ "Generator", "Progress", "Repair", "Fix" })
-                for _, gen in pairs(gens) do
-                        gen:SetAttribute("Progress", 100)
-                        for _, r in pairs(rems) do pcall(function() r:FireServer(gen, 100) end) end
-                end
+                pcall(function()
+                        local repairEvent, skillCheckEvent = getGeneratorRemotes()
+                        if not repairEvent or not skillCheckEvent then return end
+                        local generators = findAllGenerators()
+                        for _, genData in pairs(generators) do
+                                for _, point in pairs(genData.model:GetChildren()) do
+                                        if point.Name:find("GeneratorPoint") then
+                                                pcall(function()
+                                                        repairEvent:FireServer(point, true)
+                                                        skillCheckEvent:FireServer("success", 1, genData.model, point)
+                                                end)
+                                        end
+                                end
+                        end
+                end)
         end
 end)
 
