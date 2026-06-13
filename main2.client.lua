@@ -332,7 +332,35 @@ local function isPlayerInLobby()
                         if v:find("lobby") or v:find("waiting") or v:find("idle") then return true end
                 end
         end
-        return false
+        -- Fallback: kalau ga ada attribute, cek apakah ada Team "Killer" — kalau ada, artinya match sudah mulai
+        for _, p in pairs(Players:GetPlayers()) do
+                if p.Team and p.Team.Name == "Killer" then return false end
+        end
+        return true
+end
+
+-- Scan semua attribute seorang player, return map {attrName: value}
+local function scanAllAttributes(player)
+        local attrs = {}
+        local ok, err = pcall(function()
+                -- GetAttributes() returns {name: value} di Roblox
+                local success, result = pcall(function() return player:GetAttributes() end)
+                if success and type(result) == "table" then
+                        for k, v in pairs(result) do
+                                attrs[k] = v
+                        end
+                end
+                -- Juga scan character attributes
+                if player.Character then
+                        local cok, cresult = pcall(function() return player.Character:GetAttributes() end)
+                        if cok and type(cresult) == "table" then
+                                for k, v in pairs(cresult) do
+                                        attrs["Char." .. k] = v
+                                end
+                        end
+                end
+        end)
+        return attrs
 end
 
 local function predictKiller()
@@ -344,54 +372,171 @@ local function predictKiller()
         local allPlayers = Players:GetPlayers()
         local candidates = {}
 
+        -- ============================================================
+        -- SCALING: Kumpulkan semua attribute unik dari semua player
+        -- untuk membandingkan siapa yang "beda" (kemungkinan killer)
+        -- ============================================================
+        local allAttrNames = {}
+        for _, player in pairs(allPlayers) do
+                if player == LocalPlayer then continue end
+                local attrs = scanAllAttributes(player)
+                for k, _ in pairs(attrs) do
+                        allAttrNames[k] = true
+                end
+        end
+
+        -- ============================================================
+        -- SCALING DEEP: Cari data role di ReplicatedStorage
+        -- Banyak game simpan siapa killer di folder GameData/MatchData/dll
+        -- ============================================================
+        local foundKillerFromStorage = nil
+        pcall(function()
+                for _, obj in pairs(ReplicatedStorage:GetDescendants()) do
+                        local n = obj.Name:lower()
+                        -- Cari folder yang berisi info role/killer assignment
+                        if n:find("gamedata") or n:find("matchdata") or n:find("roundinfo")
+                                or n:find("gameinfo") or n:find("roleassign") or n:find("session")
+                                or n:find("matchmaking") or n:find("queue") then
+                                -- Scan isi folder ini
+                                for _, child in pairs(obj:GetDescendants()) do
+                                        local cn = child.Name:lower()
+                                        local cv = tostring(child.Value):lower()
+                                        if cn:find("killer") or cv:find("killer") then
+                                                -- Coba cari nama player di value
+                                                for _, player in pairs(allPlayers) do
+                                                        local pn = player.Name:lower()
+                                                        local pd = player.DisplayName:lower()
+                                                        if cv:find(pn, 1, true) or cv:find(pd, 1, true)
+                                                                or cn:find(pn, 1, true) or cn:find(pd, 1, true) then
+                                                                foundKillerFromStorage = player
+                                                        end
+                                                end
+                                        end
+                                end
+                                -- Juga cek attribute di folder ini sendiri
+                                local fOk, folderAttrs = pcall(function() return obj:GetAttributes() end)
+                                if fOk and type(folderAttrs) == "table" then
+                                        for k, v in pairs(folderAttrs) do
+                                                local vk = tostring(k):lower()
+                                                local vv = tostring(v):lower()
+                                                if vk:find("killer") or vv:find("killer") then
+                                                        for _, player in pairs(allPlayers) do
+                                                                if player == LocalPlayer then continue end
+                                                                local pn = player.Name:lower()
+                                                                local pd = player.DisplayName:lower()
+                                                                if vv:find(pn, 1, true) or vv:find(pd, 1, true) then
+                                                                        foundKillerFromStorage = player
+                                                                end
+                                                        end
+                                                end
+                                        end
+                                end
+                        end
+                end
+        end)
+
+        -- ============================================================
+        -- SCALING: Cek RemoteEvent yang mungkin expose killer identity
+        -- ============================================================
+        pcall(function()
+                local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+                if remotes then
+                        for _, child in pairs(remotes:GetChildren()) do
+                                local cn = child.Name:lower()
+                                if cn:find("role") or cn:find("assign") or cn:find("killer")
+                                        or cn:find("team") or cn:find("select") or cn:find("pick") then
+                                        -- Jika ini adalah ObjectValue/StringValue yang berisi player reference
+                                        if child:IsA("ObjectValue") and child.Value and child.Value:IsA("Player") then
+                                                foundKillerFromStorage = child.Value
+                                        end
+                                end
+                        end
+                end
+        end)
+
+        -- ============================================================
+        -- Jika langsung ketemu dari storage, langsung tampilkan
+        -- ============================================================
+        if foundKillerFromStorage and foundKillerFromStorage ~= LocalPlayer then
+                WindUI:Notify({
+                        Title = "Prediksi Killer",
+                        Content = foundKillerFromStorage.DisplayName .. " akan menjadi Killer!",
+                        Duration = 8,
+                })
+                print("[VD] KILLER FOUND (from storage): " .. foundKillerFromStorage.DisplayName)
+                return
+        end
+
+        -- ============================================================
+        -- FALLBACK: Scoring system berdasarkan attribute analysis
+        -- ============================================================
         for _, player in pairs(allPlayers) do
                 if player == LocalPlayer then continue end
                 local score = 0
                 local reasons = {}
+                local attrs = scanAllAttributes(player)
 
-                local roleAttr = player:GetAttribute("Role") or player:GetAttribute("Team") or player:GetAttribute("AssignedRole")
-                if roleAttr then
-                        local r = tostring(roleAttr):lower()
-                        if r:find("killer") then
+                -- Cek semua attribute yang mengandung "killer", "role", "team", "assigned"
+                for attrName, attrVal in pairs(attrs) do
+                        local an = attrName:lower()
+                        local av = tostring(attrVal):lower()
+                        if av:find("killer") then
                                 score = score + 1000
-                                table.insert(reasons, "Role attr = KILLER")
-                        elseif r:find("survivor") or r:find("surv") then
+                                table.insert(reasons, an .. " = " .. tostring(attrVal))
+                        elseif av:find("survivor") or av:find("surv") then
                                 score = score - 500
+                        end
+                        -- Attribute yang cuma dimiliki satu player (unikk) berpotensi killer marker
+                        if an:find("role") or an:find("team") or an:find("assigned")
+                                or an:find("next") or an:find("queue") or an:find("selected") then
+                                if av ~= "" and av ~= "nil" and av ~= "none" and av ~= "survivor" then
+                                        score = score + 400
+                                        table.insert(reasons, an .. " = " .. tostring(attrVal))
+                                end
                         end
                 end
 
+                -- Cek Team (kalau sudah ke-assign)
+                pcall(function()
+                        if player.Team then
+                                local tn = player.Team.Name:lower()
+                                if tn:find("killer") then
+                                        score = score + 2000
+                                        table.insert(reasons, "Team = " .. player.Team.Name)
+                                elseif tn:find("survivor") or tn:find("surv") then
+                                        score = score - 300
+                                end
+                        end
+                end)
+
+                -- Cek leaderstats
                 pcall(function()
                         local leaderstats = player:FindFirstChild("leaderstats") or player:FindFirstChild("Stats")
                         if leaderstats then
                                 for _, stat in pairs(leaderstats:GetChildren()) do
                                         local sn = stat.Name:lower()
-                                        if sn:find("killer") or sn:find("role") then
-                                                local sv = tostring(stat.Value):lower()
+                                        local sv = tostring(stat.Value):lower()
+                                        if sn:find("killer") or sn:find("role") or sn:find("team") then
                                                 if sv:find("killer") then
                                                         score = score + 800
-                                                        table.insert(reasons, "Stat = " .. sv)
+                                                        table.insert(reasons, "Stat " .. stat.Name .. " = " .. tostring(stat.Value))
+                                                elseif sv ~= "survivor" and sv ~= "none" and sv ~= "" then
+                                                        score = score + 200
+                                                        table.insert(reasons, "Stat " .. stat.Name .. " = " .. tostring(stat.Value))
                                                 end
                                         end
-                                        if sn:find("play") or sn:find("game") or sn:find("match") then
-                                                score = score + math.random(5, 30)
+                                        -- Player dengan kill count tinggi mungkin akan jadi killer
+                                        if sn:find("kill") and typeof(stat.Value) == "number" then
+                                                score = score + stat.Value * 2
+                                        end
+                                        if sn:find("play") or sn:find("game") or sn:find("match") or sn:find("round") then
+                                                score = score + math.random(5, 25)
                                         end
                                 end
                         end
                 end)
 
-                pcall(function()
-                        for _, folder in pairs({ player, player.Character, player.Backpack }) do
-                                if not folder then continue end
-                                for _, item in pairs(folder:GetDescendants()) do
-                                        local n = item.Name:lower()
-                                        if n:find("killer") or n:find("vein") or n:find("spear") then
-                                                score = score + 200
-                                                table.insert(reasons, "Item: " .. item.Name)
-                                        end
-                                end
-                        end
-                end)
-
+                -- Cek Tags
                 pcall(function()
                         for _, tag in pairs(player:GetTags()) do
                                 local t = tostring(tag):lower()
@@ -402,23 +547,19 @@ local function predictKiller()
                         end
                 end)
 
+                -- Cek jumlah Tools di Backpack (killer biasanya punya weapon khusus)
                 pcall(function()
                         local backpack = player.Backpack
                         if backpack then
-                                local toolCount = 0
-                                for _, item in pairs(backpack:GetChildren()) do
-                                        if item:IsA("Tool") or item:IsA("Backpack") then
-                                                toolCount = toolCount + 1
-                                        end
-                                end
+                                local toolCount = #backpack:GetChildren()
                                 if toolCount > 3 then
                                         score = score + toolCount * 10
-                                        table.insert(reasons, "Tools: " .. toolCount)
                                 end
                         end
                 end)
 
-                score = score + math.random(1, 15)
+                -- Tiebreaker kecil agar ga semua score sama persis
+                score = score + math.random(1, 10)
 
                 table.insert(candidates, {
                         player = player,
@@ -437,14 +578,17 @@ local function predictKiller()
         local top = candidates[1]
         local reasonStr = #top.reasons > 0 and table.concat(top.reasons, ", ") or "Analisis probabilistik"
 
+        -- Tampilkan notifikasi dengan nama jelas
         WindUI:Notify({
                 Title = "Prediksi Killer",
                 Content = top.player.DisplayName .. " kemungkinan besar jadi Killer! (Skor: " .. top.score .. ")",
-                Duration = 6,
+                Duration = 8,
         })
 
+        -- Juga tampilkan top 3 di console untuk detail
         print("[VD] === KILLER PREDICTION ===")
-        for i, c in ipairs(candidates) do
+        for i = 1, math.min(3, #candidates) do
+                local c = candidates[i]
                 local rStr = #c.reasons > 0 and " [" .. table.concat(c.reasons, ", ") .. "]" or ""
                 print(string.format("[VD] #%d %s — Score: %d%s", i, c.player.DisplayName, c.score, rStr))
         end
