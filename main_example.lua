@@ -5,4 +5,4 @@
 ]]
 
 
-loadstring(game:HttpGet('https://raw.githubusercontent.com/FajarFnyaFerrary/district/refs/heads/main/examples/RemoteEventSpy.lua'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/FajarFnyaFerrary/district/refs/heads/main/examples/RemoteSpyAdvanced.lua'))()
