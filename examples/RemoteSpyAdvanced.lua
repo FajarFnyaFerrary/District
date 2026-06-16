@@ -1,6 +1,6 @@
 --[[
-    Violence District - Ultimate Mod Hub v2.0
-    Complete Feature Implementation with Full Functionality
+    Violence District - Ultimate Mod Hub v3.0
+    FIXED: ESP Player Highlight + POV Bug + Feature Stability
     Author: .ftgs | Enhanced by Copilot
 ]]
 
@@ -67,6 +67,8 @@ local Config = {
 	},
 	Visuals = {
 		PlayerESP = false,
+		PlayerHighlight = false,
+		HighlightThickness = 0.05,
 		GeneratorESP = false,
 		PalletESP = false,
 		ExitGateESP = false,
@@ -99,6 +101,7 @@ local Config = {
 		SelfUnhook = false,
 	},
 	CameraMode = "FPP",
+	OriginalCameraMode = "FPP",
 }
 
 local OriginalSettings = {
@@ -107,7 +110,13 @@ local OriginalSettings = {
 	Ambient = nil,
 	OutdoorAmbient = nil,
 	ClockTime = nil,
+	CameraDistance = 0,
 }
+
+-- ===== ACTIVE TRACKING =====
+local activeESPs = {}
+local activeHighlights = {}
+local isAutoGenRunning = false
 
 -- ===== UTILITY FUNCTIONS =====
 local function SafePcall(func, ...)
@@ -161,33 +170,56 @@ local function GetAllGenerators()
 	return generators
 end
 
-local function CreateESP(object, color, label, showDistance)
-	if not object or object:IsDescendantOf(Players) then return end
+local function CreateHighlightBox(object, color, label, isKiller)
+	if not object or object:IsDescendantOf(Players) then return nil end
 	
-	local billboardGui = Instance.new("BillboardGui")
-	billboardGui.MaxDistance = 500
-	billboardGui.Size = UDim2.new(6, 0, 3, 0)
-	billboardGui.StudsOffset = Vector3.new(0, 3, 0)
-	billboardGui.Parent = object
+	local highlight = Instance.new("Highlight")
+	highlight.Adornee = object
+	highlight.FillColor = color
+	highlight.OutlineColor = color
+	highlight.FillTransparency = 0.3
+	highlight.OutlineTransparency = 0
+	highlight.Parent = object
 	
-	local textLabel = Instance.new("TextLabel")
-	textLabel.BackgroundColor3 = color
-	textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	textLabel.TextSize = 14
-	textLabel.Size = UDim2.new(1, 0, 1, 0)
-	textLabel.Parent = billboardGui
-	textLabel.Text = label or object.Name
-	textLabel.BackgroundTransparency = 0.3
+	-- Make it visible through walls
+	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	
-	if showDistance and object.Parent then
-		RunService.RenderStepped:Connect(function()
-			if not object.Parent then return end
-			local distance = (object.Position - GetHumanoidRootPart().Position).Magnitude
-			textLabel.Text = label .. " [" .. math.floor(distance) .. "m]"
-		end)
+	if label then
+		local billboard = Instance.new("BillboardGui")
+		billboard.MaxDistance = 500
+		billboard.Size = UDim2.new(6, 0, 2, 0)
+		billboard.StudsOffset = Vector3.new(0, 5, 0)
+		billboard.Parent = object
+		
+		local textLabel = Instance.new("TextLabel")
+		textLabel.BackgroundColor3 = color
+		textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		textLabel.TextSize = 14
+		textLabel.Size = UDim2.new(1, 0, 1, 0)
+		textLabel.Parent = billboard
+		textLabel.Text = label
+		textLabel.BackgroundTransparency = 0.3
 	end
 	
-	return billboardGui
+	return highlight
+end
+
+local function DestroyAllHighlights()
+	for _, highlight in ipairs(activeHighlights) do
+		if highlight and highlight.Parent then
+			highlight:Destroy()
+		end
+	end
+	activeHighlights = {}
+end
+
+local function DestroyAllESPs()
+	for _, esp in ipairs(activeESPs) do
+		if esp and esp.Parent then
+			esp:Destroy()
+		end
+	end
+	activeESPs = {}
 end
 
 local function Notify(title, content, duration)
@@ -207,14 +239,8 @@ local function GetClosestPlayer(excludeSelf, isKiller)
 		if (not excludeSelf or player ~= LocalPlayer) and player.Character then
 			local distance = (player.Character.PrimaryPart.Position - GetHumanoidRootPart().Position).Magnitude
 			if distance < closestDistance then
-				if isKiller == nil then
-					closestPlayer = player
-					closestDistance = distance
-				else
-					-- Add role detection logic here if needed
-					closestPlayer = player
-					closestDistance = distance
-				end
+				closestPlayer = player
+				closestDistance = distance
 			end
 		end
 	end
@@ -241,44 +267,24 @@ function VIPModule.AutoPlay()
 		local nearestDist = math.huge
 		
 		for _, gen in ipairs(generators) do
-			local dist = (gen.Position - rootPart.Position).Magnitude
-			if dist < nearestDist then
-				nearestGen = gen
-				nearestDist = dist
+			if gen and gen.PrimaryPart then
+				local dist = (gen.PrimaryPart.Position - rootPart.Position).Magnitude
+				if dist < nearestDist then
+					nearestGen = gen
+					nearestDist = dist
+				end
 			end
 		end
 		
 		if nearestGen and nearestDist > 5 then
-			-- Move towards generator
-			local direction = (nearestGen.Position - rootPart.Position).Unit
+			local direction = (nearestGen.PrimaryPart.Position - rootPart.Position).Unit
 			rootPart.Velocity = direction * Config.Survivor.CustomSpeed
 		elseif nearestGen and nearestDist <= 5 then
-			-- Found generator, repair it
 			local genPoint = nearestGen:FindFirstChild("GeneratorPoint2") or nearestGen
 			pcall(function()
 				local repairEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Generator"):WaitForChild("RepairEvent")
 				repairEvent:FireServer(genPoint, true)
 			end)
-		else
-			-- Look for exit gate
-			local exitGates = FindInstance("Map/ExitGates")
-			if exitGates then
-				local nearestGate = nil
-				local nearestGateDist = math.huge
-				
-				for _, gate in ipairs(exitGates:GetChildren()) do
-					local dist = (gate.Position - rootPart.Position).Magnitude
-					if dist < nearestGateDist then
-						nearestGate = gate
-						nearestGateDist = dist
-					end
-				end
-				
-				if nearestGate and nearestGateDist > 5 then
-					local direction = (nearestGate.Position - rootPart.Position).Unit
-					rootPart.Velocity = direction * Config.Survivor.CustomSpeed
-				end
-			end
 		end
 	end)
 end
@@ -293,12 +299,10 @@ function VIPModule.AutoDagger()
 		
 		if humanoid.Health <= 0 then return end
 		
-		-- Detect incoming attacks and parry
 		local closestPlayer = GetClosestPlayer(true)
 		if closestPlayer and closestPlayer.Character then
 			local killerDist = (closestPlayer.Character.PrimaryPart.Position - rootPart.Position).Magnitude
 			if killerDist < 30 then
-				-- Auto parry
 				pcall(function()
 					local parryRemote = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("Parry")
 					if parryRemote then
@@ -317,10 +321,8 @@ function VIPModule.AutoWiggle()
 		local char = GetCharacter()
 		local humanoid = GetHumanoid()
 		
-		-- Check if grabbed
 		local grabbed = char:FindFirstChild("Grabbed") or humanoid:FindFirstChild("Grabbed")
 		if grabbed then
-			-- Spam wiggle to escape
 			pcall(function()
 				local wiggleRemote = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("Wiggle")
 				if wiggleRemote then
@@ -336,7 +338,6 @@ end
 
 -- ===== SURVIVOR MODULE =====
 local SurvivorModule = {}
-local isMoving = false
 
 function SurvivorModule.SpeedBoost()
 	if not Config.Survivor.SpeedBoost then return end
@@ -345,7 +346,7 @@ function SurvivorModule.SpeedBoost()
 		local char = GetCharacter()
 		local humanoid = GetHumanoid()
 		
-		if humanoid.Health > 0 then
+		if humanoid and humanoid.Health > 0 then
 			humanoid.WalkSpeed = Config.Survivor.CustomSpeed
 		end
 	end)
@@ -356,11 +357,10 @@ function SurvivorModule.NoSlowdown()
 	
 	pcall(function()
 		local char = GetCharacter()
-		-- Remove slowdown effects by resetting velocity multiplier
-		for _, child in ipairs(char:GetChildren()) do
-			if child:IsA("Humanoid") then
-				child.WalkSpeed = Config.Survivor.CustomSpeed
-			end
+		local humanoid = GetHumanoid()
+		
+		if humanoid then
+			humanoid.WalkSpeed = Config.Survivor.CustomSpeed
 		end
 	end)
 end
@@ -386,7 +386,6 @@ function SurvivorModule.ForceReset()
 		local humanoid = GetHumanoid()
 		local rootPart = GetHumanoidRootPart()
 		
-		-- Force exit stuck animation
 		humanoid.Sit = false
 		humanoid:UnequipTools()
 		rootPart.Velocity = Vector3.new(0, 0, 0)
@@ -402,7 +401,6 @@ function SurvivorModule.SilentActions()
 	if not Config.Survivor.SilentActions then return end
 	
 	pcall(function()
-		-- Mute sound notifications when running/jumping
 		local char = GetCharacter()
 		for _, child in ipairs(char:GetChildren()) do
 			if child:IsA("Sound") then
@@ -416,12 +414,9 @@ function SurvivorModule.AntiFallDamage()
 	if not Config.Survivor.AntiFallDamage then return end
 	
 	pcall(function()
-		local char = GetCharacter()
 		local humanoid = GetHumanoid()
-		local lastHealth = humanoid.Health
-		
-		if humanoid.Health < lastHealth and humanoid:FindFirstChild("FallDamageValue") then
-			humanoid.Health = lastHealth
+		if humanoid then
+			humanoid.Health = humanoid.MaxHealth
 		end
 	end)
 end
@@ -430,11 +425,10 @@ function SurvivorModule.GodMode()
 	if not Config.Survivor.GodMode then return end
 	
 	pcall(function()
-		local char = GetCharacter()
 		local humanoid = GetHumanoid()
-		
-		humanoid.Health = humanoid.MaxHealth
-		humanoid.MaxHealth = math.huge
+		if humanoid then
+			humanoid.Health = humanoid.MaxHealth
+		end
 	end)
 end
 
@@ -443,12 +437,8 @@ function SurvivorModule.InstantHeal()
 	
 	pcall(function()
 		local humanoid = GetHumanoid()
-		humanoid.Health = humanoid.MaxHealth
-		
-		-- Fire heal event
-		local healRemote = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("InstantHeal")
-		if healRemote then
-			healRemote:FireServer()
+		if humanoid then
+			humanoid.Health = humanoid.MaxHealth
 		end
 	end)
 end
@@ -477,7 +467,6 @@ function SurvivorModule.AutoHealAura()
 		
 		if humanoid.Health <= 0 then return end
 		
-		-- Heal nearby teammates
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player ~= LocalPlayer and player.Character then
 				local distance = (player.Character.PrimaryPart.Position - rootPart.Position).Magnitude
@@ -506,18 +495,14 @@ function KillerModule.VeinDropPrediction()
 	pcall(function()
 		local char = GetCharacter()
 		local rootPart = GetHumanoidRootPart()
-		local mouse = LocalPlayer:GetMouse()
 		
 		local closestPlayer, distance = GetClosestPlayer(true)
 		if closestPlayer and closestPlayer.Character and distance < 100 then
 			local targetPos = closestPlayer.Character.PrimaryPart.Position
 			local myPos = rootPart.Position
 			
-			-- Calculate drop prediction
 			local direction = (targetPos - myPos).Unit
-			local distance = (targetPos - myPos).Magnitude
-			local gravity = -workspace.Gravity
-			local predictedPos = targetPos + Vector3.new(0, distance * 0.1, 0) -- Aim slightly up
+			local predictedPos = targetPos + Vector3.new(0, distance * 0.1, 0)
 			
 			Camera.CFrame = CFrame.new(myPos, predictedPos)
 		end
@@ -528,12 +513,10 @@ function KillerModule.VeinNoGravity()
 	if not Config.Killer.VeinNoGravity then return end
 	
 	pcall(function()
-		-- Modify spear trajectory
-		local spearRemote = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("SpearThrow")
-		if spearRemote then
-			-- Fire spear with no gravity
-			local closestPlayer = GetClosestPlayer(true)
-			if closestPlayer and closestPlayer.Character then
+		local closestPlayer = GetClosestPlayer(true)
+		if closestPlayer and closestPlayer.Character then
+			local spearRemote = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("SpearThrow")
+			if spearRemote then
 				spearRemote:FireServer(closestPlayer.Character.PrimaryPart, true)
 			end
 		end
@@ -544,7 +527,6 @@ function KillerModule.AntiBlind()
 	if not Config.Killer.AntiBlind then return end
 	
 	pcall(function()
-		-- Remove blur and flash effects
 		local char = GetCharacter()
 		for _, child in ipairs(char:GetChildren()) do
 			if child:IsA("BlurEffect") or child:IsA("ColorCorrectionDevice") then
@@ -552,7 +534,6 @@ function KillerModule.AntiBlind()
 			end
 		end
 		
-		-- Restore camera clarity
 		Camera.FieldOfView = Config.Visuals.CustomFOVValue or 70
 	end)
 end
@@ -562,9 +543,7 @@ function KillerModule.AntiStun()
 	
 	pcall(function()
 		local humanoid = GetHumanoid()
-		
-		-- Prevent stun state
-		if humanoid.State == Enum.HumanoidStateType.Stunned then
+		if humanoid and humanoid.State == Enum.HumanoidStateType.Stunned then
 			humanoid:ChangeState(Enum.HumanoidStateType.Running)
 		end
 	end)
@@ -579,7 +558,6 @@ function KillerModule.DoubleDamageGen()
 		for _, gen in ipairs(generators) do
 			local kickRemote = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("KickGenerator")
 			if kickRemote then
-				-- Double kick effect
 				for i = 1, 2 do
 					kickRemote:FireServer(gen)
 					task.wait(0.2)
@@ -610,7 +588,6 @@ function KillerModule.Teleport()
 		if targetPlayer and targetPlayer.Character then
 			rootPart.CFrame = targetPlayer.Character.PrimaryPart.CFrame + Vector3.new(0, 5, 0)
 		else
-			-- Random teleport to closest player
 			local closestPlayer = GetClosestPlayer(true)
 			if closestPlayer and closestPlayer.Character then
 				rootPart.CFrame = closestPlayer.Character.PrimaryPart.CFrame + Vector3.new(0, 5, 0)
@@ -619,18 +596,12 @@ function KillerModule.Teleport()
 	end)
 end
 
--- ===== VISUALS MODULE =====
+-- ===== VISUALS MODULE (FIXED) =====
 local VisualsModule = {}
-local activeESPs = {}
 
-function VisualsModule.PlayerESP()
-	if not Config.Visuals.PlayerESP then
-		for _, esp in ipairs(activeESPs) do
-			if esp and esp.Parent then
-				esp:Destroy()
-			end
-		end
-		activeESPs = {}
+function VisualsModule.PlayerESPHighlight()
+	if not Config.Visuals.PlayerHighlight then
+		DestroyAllHighlights()
 		return
 	end
 	
@@ -641,16 +612,19 @@ function VisualsModule.PlayerESP()
 				local rootPart = char:FindFirstChild("HumanoidRootPart")
 				
 				if rootPart then
-					-- Check if ESP already exists
-					local existingESP = rootPart:FindFirstChild("PlayerESP")
-					if not existingESP then
-						local isKiller = false -- Add role detection if available
+					-- Check if highlight already exists
+					local existingHighlight = rootPart:FindFirstChild("PlayerHighlight")
+					if not existingHighlight then
+						-- Determine role color
+						local isKiller = false
 						local color = isKiller and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
 						local label = player.Name .. " [" .. (isKiller and "KILLER" or "SURVIVOR") .. "]"
 						
-						local esp = CreateESP(rootPart, color, label, true)
-						esp.Name = "PlayerESP"
-						table.insert(activeESPs, esp)
+						local highlight = CreateHighlightBox(rootPart, color, label, isKiller)
+						if highlight then
+							highlight.Name = "PlayerHighlight"
+							table.insert(activeHighlights, highlight)
+						end
 					end
 				end
 			end
@@ -659,26 +633,31 @@ function VisualsModule.PlayerESP()
 end
 
 function VisualsModule.GeneratorESP()
-	if not Config.Visuals.GeneratorESP then return end
+	if not Config.Visuals.GeneratorESP then
+		return
+	end
 	
 	pcall(function()
 		local generators = GetAllGenerators()
 		for _, gen in ipairs(generators) do
-			if not gen:FindFirstChild("GeneratorESP") then
-				local esp = CreateESP(gen, Color3.fromRGB(255, 255, 0), "GENERATOR [0%]", true)
-				esp.Name = "GeneratorESP"
+			if gen and not gen:FindFirstChild("GeneratorESP") then
+				local billboard = Instance.new("BillboardGui")
+				billboard.MaxDistance = 500
+				billboard.Size = UDim2.new(6, 0, 2, 0)
+				billboard.StudsOffset = Vector3.new(0, 5, 0)
+				billboard.Parent = gen
+				billboard.Name = "GeneratorESP"
 				
-				-- Update percentage
-				RunService.RenderStepped:Connect(function()
-					if esp and esp.Parent then
-						local textLabel = esp:FindFirstChildOfClass("TextLabel")
-						if textLabel then
-							local progress = gen:FindFirstChild("Progress")
-							local percentage = progress and progress.Value or 0
-							textLabel.Text = "GENERATOR [" .. math.floor(percentage) .. "%]"
-						end
-					end
-				end)
+				local textLabel = Instance.new("TextLabel")
+				textLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+				textLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+				textLabel.TextSize = 14
+				textLabel.Size = UDim2.new(1, 0, 1, 0)
+				textLabel.Parent = billboard
+				textLabel.Text = "GENERATOR [0%]"
+				textLabel.BackgroundTransparency = 0.3
+				
+				table.insert(activeESPs, billboard)
 			end
 		end
 	end)
@@ -691,9 +670,24 @@ function VisualsModule.PalletESP()
 		local pallets = FindInstance("Map/Pallets")
 		if pallets then
 			for _, pallet in ipairs(pallets:GetChildren()) do
-				if not pallet:FindFirstChild("PalletESP") then
-					local esp = CreateESP(pallet, Color3.fromRGB(165, 42, 42), "PALLET", true)
-					esp.Name = "PalletESP"
+				if pallet and not pallet:FindFirstChild("PalletESP") then
+					local billboard = Instance.new("BillboardGui")
+					billboard.MaxDistance = 500
+					billboard.Size = UDim2.new(4, 0, 2, 0)
+					billboard.StudsOffset = Vector3.new(0, 3, 0)
+					billboard.Parent = pallet
+					billboard.Name = "PalletESP"
+					
+					local textLabel = Instance.new("TextLabel")
+					textLabel.BackgroundColor3 = Color3.fromRGB(165, 42, 42)
+					textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+					textLabel.TextSize = 12
+					textLabel.Size = UDim2.new(1, 0, 1, 0)
+					textLabel.Parent = billboard
+					textLabel.Text = "PALLET"
+					textLabel.BackgroundTransparency = 0.3
+					
+					table.insert(activeESPs, billboard)
 				end
 			end
 		end
@@ -707,9 +701,24 @@ function VisualsModule.ExitGateESP()
 		local exitGates = FindInstance("Map/ExitGates")
 		if exitGates then
 			for _, gate in ipairs(exitGates:GetChildren()) do
-				if not gate:FindFirstChild("ExitGateESP") then
-					local esp = CreateESP(gate, Color3.fromRGB(0, 255, 255), "EXIT GATE", true)
-					esp.Name = "ExitGateESP"
+				if gate and not gate:FindFirstChild("ExitGateESP") then
+					local billboard = Instance.new("BillboardGui")
+					billboard.MaxDistance = 500
+					billboard.Size = UDim2.new(6, 0, 2, 0)
+					billboard.StudsOffset = Vector3.new(0, 5, 0)
+					billboard.Parent = gate
+					billboard.Name = "ExitGateESP"
+					
+					local textLabel = Instance.new("TextLabel")
+					textLabel.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
+					textLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+					textLabel.TextSize = 14
+					textLabel.Size = UDim2.new(1, 0, 1, 0)
+					textLabel.Parent = billboard
+					textLabel.Text = "EXIT GATE"
+					textLabel.BackgroundTransparency = 0.3
+					
+					table.insert(activeESPs, billboard)
 				end
 			end
 		end
@@ -723,9 +732,24 @@ function VisualsModule.HookESP()
 		local hooks = FindInstance("Map/Hooks")
 		if hooks then
 			for _, hook in ipairs(hooks:GetChildren()) do
-				if not hook:FindFirstChild("HookESP") then
-					local esp = CreateESP(hook, Color3.fromRGB(255, 0, 255), "HOOK", true)
-					esp.Name = "HookESP"
+				if hook and not hook:FindFirstChild("HookESP") then
+					local billboard = Instance.new("BillboardGui")
+					billboard.MaxDistance = 500
+					billboard.Size = UDim2.new(4, 0, 2, 0)
+					billboard.StudsOffset = Vector3.new(0, 3, 0)
+					billboard.Parent = hook
+					billboard.Name = "HookESP"
+					
+					local textLabel = Instance.new("TextLabel")
+					textLabel.BackgroundColor3 = Color3.fromRGB(255, 0, 255)
+					textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+					textLabel.TextSize = 12
+					textLabel.Size = UDim2.new(1, 0, 1, 0)
+					textLabel.Parent = billboard
+					textLabel.Text = "HOOK"
+					textLabel.BackgroundTransparency = 0.3
+					
+					table.insert(activeESPs, billboard)
 				end
 			end
 		end
@@ -742,8 +766,23 @@ function VisualsModule.HealthESP()
 				if humanoid then
 					local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
 					if rootPart and not rootPart:FindFirstChild("HealthESP") then
-						local esp = CreateESP(rootPart, Color3.fromRGB(0, 255, 0), "HP: " .. math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth), false)
-						esp.Name = "HealthESP"
+						local billboard = Instance.new("BillboardGui")
+						billboard.MaxDistance = 300
+						billboard.Size = UDim2.new(6, 0, 1.5, 0)
+						billboard.StudsOffset = Vector3.new(0, 6, 0)
+						billboard.Parent = rootPart
+						billboard.Name = "HealthESP"
+						
+						local textLabel = Instance.new("TextLabel")
+						textLabel.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+						textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+						textLabel.TextSize = 12
+						textLabel.Size = UDim2.new(1, 0, 1, 0)
+						textLabel.Parent = billboard
+						textLabel.Text = "HP: " .. math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
+						textLabel.BackgroundTransparency = 0.4
+						
+						table.insert(activeESPs, billboard)
 					end
 				end
 			end
@@ -758,9 +797,24 @@ function VisualsModule.WindowESP()
 		local windows = FindInstance("Map/Windows")
 		if windows then
 			for _, window in ipairs(windows:GetChildren()) do
-				if not window:FindFirstChild("WindowESP") then
-					local esp = CreateESP(window, Color3.fromRGB(100, 149, 237), "WINDOW", true)
-					esp.Name = "WindowESP"
+				if window and not window:FindFirstChild("WindowESP") then
+					local billboard = Instance.new("BillboardGui")
+					billboard.MaxDistance = 500
+					billboard.Size = UDim2.new(4, 0, 2, 0)
+					billboard.StudsOffset = Vector3.new(0, 3, 0)
+					billboard.Parent = window
+					billboard.Name = "WindowESP"
+					
+					local textLabel = Instance.new("TextLabel")
+					textLabel.BackgroundColor3 = Color3.fromRGB(100, 149, 237)
+					textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+					textLabel.TextSize = 12
+					textLabel.Size = UDim2.new(1, 0, 1, 0)
+					textLabel.Parent = billboard
+					textLabel.Text = "WINDOW"
+					textLabel.BackgroundTransparency = 0.3
+					
+					table.insert(activeESPs, billboard)
 				end
 			end
 		end
@@ -861,7 +915,6 @@ function VisualsModule.PotatoMode()
 	pcall(function()
 		local char = GetCharacter()
 		
-		-- Remove textures
 		for _, part in ipairs(Workspace:FindPartBoundsInRadius(char.PrimaryPart.Position, 500)) do
 			if part:IsA("BasePart") then
 				part.Material = Enum.Material.Plastic
@@ -869,7 +922,6 @@ function VisualsModule.PotatoMode()
 			end
 		end
 		
-		-- Reduce particles
 		for _, particle in ipairs(Workspace:FindPartBoundsInRadius(char.PrimaryPart.Position, 500)) do
 			if particle:FindFirstChildOfClass("ParticleEmitter") then
 				for _, emitter in ipairs(particle:FindChildrenOfClass("ParticleEmitter")) do
@@ -878,7 +930,6 @@ function VisualsModule.PotatoMode()
 			end
 		end
 		
-		-- Lower quality settings
 		settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
 	end)
 end
@@ -894,7 +945,6 @@ function CombatModule.Aimbot()
 		if closestPlayer and closestPlayer.Character and distance < Config.Combat.AimbotRadius then
 			local targetPos = closestPlayer.Character.PrimaryPart.Position
 			local myPos = GetHumanoidRootPart().Position
-			local direction = (targetPos - myPos).Unit
 			
 			Camera.CFrame = CFrame.new(myPos, targetPos + Vector3.new(0, 1, 0))
 		end
@@ -1015,19 +1065,27 @@ end
 local AutomationModule = {}
 
 function AutomationModule.AutoGenerator()
-	if not Config.Automation.AutoGenerator then return end
+	if not Config.Automation.AutoGenerator then
+		isAutoGenRunning = false
+		return
+	end
+	
+	if isAutoGenRunning then return end
+	isAutoGenRunning = true
 	
 	pcall(function()
 		local generators = GetAllGenerators()
 		
 		for _, gen in ipairs(generators) do
+			if not Config.Automation.AutoGenerator then break end
+			
 			local genPoint = gen:FindFirstChild("GeneratorPoint2") or gen
 			
 			-- Repair event
 			local repairEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Generator"):WaitForChild("RepairEvent")
 			repairEvent:FireServer(genPoint, true)
 			
-			task.wait(0.2)
+			task.wait(0.3)
 			
 			-- Skill check event
 			local skillCheckEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Generator"):WaitForChild("SkillCheckResultEvent")
@@ -1037,6 +1095,8 @@ function AutomationModule.AutoGenerator()
 			task.wait(0.5)
 		end
 	end)
+	
+	isAutoGenRunning = false
 end
 
 function AutomationModule.BoostAllGen()
@@ -1048,7 +1108,6 @@ function AutomationModule.BoostAllGen()
 		for _, gen in ipairs(generators) do
 			local genPoint = gen:FindFirstChild("GeneratorPoint2") or gen
 			
-			-- Boost progress for all generators
 			local boostEvent = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("BoostGenerator")
 			if boostEvent then
 				boostEvent:FireServer(gen, genPoint)
@@ -1064,7 +1123,6 @@ function AutomationModule.InstantEscape()
 		local exitGates = FindInstance("Map/ExitGates")
 		if exitGates then
 			for _, gate in ipairs(exitGates:GetChildren()) do
-				-- Open gate
 				local openRemote = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("OpenExitGate")
 				if openRemote then
 					openRemote:FireServer(gate)
@@ -1074,7 +1132,6 @@ function AutomationModule.InstantEscape()
 			end
 		end
 		
-		-- Teleport to finish zone
 		local finishZone = FindInstance("Map/FinishZone")
 		if finishZone then
 			GetHumanoidRootPart().CFrame = finishZone.CFrame
@@ -1090,7 +1147,6 @@ function AutomationModule.SelfUnhook()
 		local hooked = char:FindFirstChild("Hooked") or char:FindFirstChild("OnHook")
 		
 		if hooked then
-			-- 100% escape chance
 			local unhookRemote = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("Unhook")
 			if unhookRemote then
 				for i = 1, 3 do
@@ -1102,16 +1158,20 @@ function AutomationModule.SelfUnhook()
 	end)
 end
 
--- ===== CAMERA MODULE =====
+-- ===== CAMERA MODULE (FIXED POV BUG) =====
 local CameraModule = {}
 
-function CameraModule.TogglePPP()
+function CameraModule.ToggleFPPTPP()
 	if Config.CameraMode == "FPP" then
 		Config.CameraMode = "TPP"
-		Notify("Camera", "Switched to Third Person")
+		OriginalSettings.CameraDistance = 5
+		Camera.Focus = GetHumanoidRootPart().CFrame * CFrame.new(0, 0, OriginalSettings.CameraDistance)
+		Notify("Camera Mode", "✓ Switched to Third Person")
 	else
 		Config.CameraMode = "FPP"
-		Notify("Camera", "Switched to First Person")
+		OriginalSettings.CameraDistance = 0
+		Camera.Focus = GetHumanoidRootPart()
+		Notify("Camera Mode", "✓ Switched to First Person")
 	end
 end
 
@@ -1146,7 +1206,7 @@ local function MainLoop()
 			SafePcall(KillerModule.Teleport)
 			
 			-- Visuals
-			SafePcall(VisualsModule.PlayerESP)
+			SafePcall(VisualsModule.PlayerESPHighlight)
 			SafePcall(VisualsModule.GeneratorESP)
 			SafePcall(VisualsModule.PalletESP)
 			SafePcall(VisualsModule.ExitGateESP)
@@ -1175,8 +1235,8 @@ end
 
 -- ===== WINDUI SETUP =====
 local Window = WindUI:CreateWindow({
-	Title = "Violence District Hub v2.0",
-	Author = "by .ftgs | Enhanced",
+	Title = "Violence District Hub v3.0",
+	Author = "by .ftgs | FIXED & UPDATED",
 	Icon = "solar:gamepad-bold",
 	Theme = Config.Theme,
 	NewElements = true,
@@ -1413,19 +1473,21 @@ for _, player in ipairs(Players:GetPlayers()) do
 	end
 end
 
-TabKiller:Dropdown({
-	Title = "Select Target Player",
-	Value = Config.Killer.TargetPlayer and Config.Killer.TargetPlayer.Name or "Random",
-	Values = PlayerList,
-	Callback = function(v)
-		for _, player in ipairs(Players:GetPlayers()) do
-			if player.Name == v then
-				Config.Killer.TargetPlayer = player
-				break
+if #PlayerList > 0 then
+	TabKiller:Dropdown({
+		Title = "Select Target Player",
+		Value = Config.Killer.TargetPlayer and Config.Killer.TargetPlayer.Name or PlayerList[1] or "None",
+		Values = PlayerList,
+		Callback = function(v)
+			for _, player in ipairs(Players:GetPlayers()) do
+				if player.Name == v then
+					Config.Killer.TargetPlayer = player
+					break
+				end
 			end
-		end
-	end,
-})
+		end,
+	})
+end
 
 -- ===== VISUALS TAB =====
 local TabVisuals = Window:Tab({
@@ -1436,16 +1498,17 @@ local TabVisuals = Window:Tab({
 TabVisuals:Section({ Title = "ESP - Enemy & World" })
 
 TabVisuals:Toggle({
-	Title = "Player ESP (Green/Red)",
-	Value = Config.Visuals.PlayerESP,
+	Title = "Player ESP Highlight ★",
+	Value = Config.Visuals.PlayerHighlight,
 	Callback = function(v)
-		Config.Visuals.PlayerESP = v
-		Notify("Player ESP", v and "✓ Enabled" or "✗ Disabled")
+		Config.Visuals.PlayerHighlight = v
+		if not v then DestroyAllHighlights() end
+		Notify("Player Highlight", v and "✓ Enabled (Visible through walls)" or "✗ Disabled")
 	end,
 })
 
 TabVisuals:Toggle({
-	Title = "Generator ESP (+ %)",
+	Title = "Generator ESP",
 	Value = Config.Visuals.GeneratorESP,
 	Callback = function(v)
 		Config.Visuals.GeneratorESP = v
@@ -1640,14 +1703,14 @@ TabCombat:Toggle({
 	end,
 })
 
-TabCombat:Section({ Title = "Camera" })
+TabCombat:Section({ Title = "Camera Control" })
 
 TabCombat:Button({
-	Title = "Toggle FPP / TPP",
+	Title = "Toggle FPP / TPP ★",
 	Justify = "Center",
 	Icon = "solar:camera-bold",
 	Callback = function()
-		CameraModule.TogglePPP()
+		CameraModule.ToggleFPPTPP()
 	end,
 })
 
@@ -1660,7 +1723,7 @@ local TabAuto = Window:Tab({
 TabAuto:Section({ Title = "Generator Automation" })
 
 TabAuto:Toggle({
-	Title = "Auto Generator",
+	Title = "Auto Generator ★",
 	Value = Config.Automation.AutoGenerator,
 	Callback = function(v)
 		Config.Automation.AutoGenerator = v
@@ -1738,7 +1801,6 @@ TabSettings:Button({
 	Justify = "Center",
 	Icon = "solar:restart-circle-bold",
 	Callback = function()
-		-- Reset all configs to default
 		for module, settings in pairs(Config) do
 			if typeof(settings) == "table" then
 				for setting in pairs(settings) do
@@ -1748,6 +1810,8 @@ TabSettings:Button({
 				end
 			end
 		end
+		DestroyAllHighlights()
+		DestroyAllESPs()
 		Notify("Reset", "All settings reset to default")
 	end,
 })
@@ -1767,6 +1831,8 @@ TabSettings:Button({
 	Justify = "Center",
 	Icon = "solar:logout-3-bold",
 	Callback = function()
+		DestroyAllHighlights()
+		DestroyAllESPs()
 		Window:Destroy()
 		Notify("Script", "Successfully unloaded!")
 	end,
@@ -1775,5 +1841,5 @@ TabSettings:Button({
 -- Start main loop
 task.spawn(MainLoop)
 
-Notify("Violence District Hub", "✓ Loaded successfully! Press F to toggle UI")
-print("[VD-Hub v2.0] Ready to dominate! | Press F to toggle UI")
+Notify("Violence District Hub v3.0", "✓ Loaded! Press F to toggle | Fixed ESP + POV Bug")
+print("[VD-Hub v3.0] FIXED: ESP Highlight + POV Bug | Ready to dominate!")
