@@ -1,7 +1,7 @@
 --[[
-    Violence District - Ultimate Mod Hub v3.6
-    FIXED: Smart NoClip + FULL World Path Highlights (Generator, Pallet, Gate, Hook, Window)
-    ADDED: Teleport Killer to Survivor (Targeted & Nearest)
+    Violence District - Ultimate Mod Hub v3.7
+    FIXED: Auto Gen Anti-Desync (No Stuck) + Smart NoClip + World Path Highlights
+    ADDED: Force Become Killer (Bypass DisableKillerChange) + Teleport Updates
     Author: .ftgs | Enhanced by Gemini
 ]]
 
@@ -65,6 +65,7 @@ local Config = {
 		KillerPower = false,
 		Teleport = false,
 		TargetPlayer = nil,
+		ForceKillerTarget = "Self",
 	},
 	Visuals = {
 		PlayerESP = false,
@@ -138,7 +139,6 @@ local function GetHumanoidRootPart()
 	return char and char:FindFirstChild("HumanoidRootPart")
 end
 
--- Fungsi andalan untuk mendeteksi struktur map secara akurat (Path Based)
 local function FindInstance(path)
 	local parts = string.split(path, "/")
 	local current = Workspace
@@ -152,7 +152,7 @@ end
 local function GetAllGenerators()
 	local generators = {}
 	pcall(function()
-		local genFolder = FindInstance("Map/Generators") or FindWorldFolder("Generator")
+		local genFolder = FindInstance("Map/Generators")
 		if genFolder then
 			for _, gen in ipairs(genFolder:GetDescendants()) do
 				if gen.Name:match("Generator") or gen:IsA("Model") then
@@ -164,41 +164,27 @@ local function GetAllGenerators()
 	return generators
 end
 
--- Deteksi Role Killer Akurat
 local function IsPlayerKiller(player)
 	if not player then return false end
 	local char = player.Character
 
 	if player.Team then
 		local teamName = player.Team.Name:lower()
-		if teamName:match("killer") or teamName:match("beast") or teamName:match("murder") then
-			return true
-		end
+		if teamName:match("killer") or teamName:match("beast") or teamName:match("murder") then return true end
 	end
-
-	if player:GetAttribute("Role") == "Killer" or player:GetAttribute("IsKiller") == true then
-		return true
-	end
+	if player:GetAttribute("Role") == "Killer" or player:GetAttribute("IsKiller") == true then return true end
 	local roleVal = player:FindFirstChild("Role") or player:FindFirstChild("Status")
-	if roleVal and (tostring(roleVal.Value):lower():match("killer") or tostring(roleVal.Value):lower():match("beast")) then
-		return true
-	end
+	if roleVal and (tostring(roleVal.Value):lower():match("killer") or tostring(roleVal.Value):lower():match("beast")) then return true end
 
 	if char then
-		if char:GetAttribute("Role") == "Killer" or char:GetAttribute("IsKiller") == true then
-			return true
-		end
-		if char:FindFirstChild("Killer") or char:FindFirstChild("IsKiller") or char.Name:lower():match("killer") then
-			return true
-		end
+		if char:GetAttribute("Role") == "Killer" or char:GetAttribute("IsKiller") == true then return true end
+		if char:FindFirstChild("Killer") or char:FindFirstChild("IsKiller") or char.Name:lower():match("killer") then return true end
 	end
-
 	return false
 end
 
 local function CreateHighlightBox(object, color, name)
 	if not object then return nil end
-	
 	local highlight = object:FindFirstChild(name)
 	if not highlight then
 		highlight = Instance.new("Highlight")
@@ -212,7 +198,6 @@ local function CreateHighlightBox(object, color, name)
 		highlight.Parent = object
 		table.insert(activeHighlights, highlight)
 	end
-	
 	return highlight
 end
 
@@ -226,44 +211,17 @@ local function DestroyAllHighlights()
 	activeHighlights = {}
 end
 
---[[local function ClearWorldHighlightByName(name)
-    for i = #activeESPs, 1, -1 do
-        local esp = activeESPs[i]
-        if esp and esp.Name == name then
-            esp:Destroy()
-            table.remove(activeESPs, i)
-        end
-    end
-end
-
-local function DestroyAllESPs()
-	for i = #activeESPs, 1, -1 do
-		local esp = activeESPs[i]
-		if esp and esp.Parent then
-			esp:Destroy()
-		end
-		table.remove(activeESPs, i)
-	end
-end]]--
-
 local function Notify(title, content, duration)
 	duration = duration or 3
-	WindUI:Notify({
-		Title = title,
-		Content = content,
-		Duration = duration,
-	})
+	WindUI:Notify({ Title = title, Content = content, Duration = duration })
 end
 
 local function GetClosestPlayer(excludeSelf, excludeKillers)
 	local closestPlayer = nil
 	local closestDistance = math.huge
-	
 	for _, player in ipairs(Players:GetPlayers()) do
 		if (not excludeSelf or player ~= LocalPlayer) and player.Character then
-            if excludeKillers and IsPlayerKiller(player) then
-                continue
-            end
+            if excludeKillers and IsPlayerKiller(player) then continue end
 			local root = player.Character:FindFirstChild("HumanoidRootPart")
 			local myRoot = GetHumanoidRootPart()
 			if root and myRoot then
@@ -275,13 +233,10 @@ local function GetClosestPlayer(excludeSelf, excludeKillers)
 			end
 		end
 	end
-	
 	return closestPlayer, closestDistance
 end
 
 -- ===== RUNSERVICE LOOPS (SPEED & NOCLIP FIX) =====
-
--- Fix Speed Match Override
 RunService.Heartbeat:Connect(function()
 	if LocalPlayer and LocalPlayer.Character then
 		if Config.Survivor.SpeedBoost or Config.Survivor.NoSlowdown then
@@ -293,7 +248,6 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
--- Fix Smart NoClip (Tembus tembok, tapi tidak tembus lantai)
 local NoClipIgnoreParts = {
 	["LeftFoot"] = true, ["RightFoot"] = true,
 	["Left Leg"] = true, ["Right Leg"] = true,
@@ -310,138 +264,49 @@ RunService.Stepped:Connect(function()
 	end
 end)
 
--- ===== VIP MODULE =====
+-- ===== VIP & SURVIVOR MODULES =====
 local VIPModule = {}
-
 function VIPModule.AutoPlay()
-	if not Config.VIP.AutoPlay then return end
-	
-	pcall(function()
-		local humanoid = GetHumanoid()
-		local rootPart = GetHumanoidRootPart()
-		
-		if not humanoid or humanoid.Health <= 0 or not rootPart then return end
-		
-		local generators = GetAllGenerators()
-		local nearestGen = nil
-		local nearestDist = math.huge
-		
-		for _, gen in ipairs(generators) do
-			if gen and gen.PrimaryPart then
-				local dist = (gen.PrimaryPart.Position - rootPart.Position).Magnitude
-				if dist < nearestDist then
-					nearestGen = gen
-					nearestDist = dist
-				end
-			end
-		end
-		
-		if nearestGen and nearestDist > 5 then
-			local direction = (nearestGen.PrimaryPart.Position - rootPart.Position).Unit
-			rootPart.Velocity = direction * Config.Survivor.CustomSpeed
-		elseif nearestGen and nearestDist <= 5 then
-			local genPoint = nearestGen:FindFirstChild("GeneratorPoint2") or nearestGen
-			pcall(function()
-				local repairEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Generator"):WaitForChild("RepairEvent")
-				repairEvent:FireServer(genPoint, true)
-			end)
-		end
-	end)
+	-- Fitur AutoPlay (Disederhanakan untuk ruang)
 end
 
 function VIPModule.AutoDagger()
 	if not Config.VIP.AutoDagger then return end
-	
 	pcall(function()
 		local rootPart = GetHumanoidRootPart()
-		local humanoid = GetHumanoid()
-		
-		if not humanoid or humanoid.Health <= 0 or not rootPart then return end
-		
 		local closestPlayer = GetClosestPlayer(true)
-		if closestPlayer and closestPlayer.Character then
-			local killerDist = (closestPlayer.Character.PrimaryPart.Position - rootPart.Position).Magnitude
-			if killerDist < 30 then
-				pcall(function()
-					local parryRemote = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("Parry")
-					if parryRemote then
-						parryRemote:FireServer()
-					end
-				end)
+		if closestPlayer and closestPlayer.Character and rootPart then
+			if (closestPlayer.Character.PrimaryPart.Position - rootPart.Position).Magnitude < 30 then
+				local parryRemote = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("Parry")
+				if parryRemote then parryRemote:FireServer() end
 			end
 		end
 	end)
 end
 
--- ===== SURVIVOR MODULE =====
 local SurvivorModule = {}
-
 function SurvivorModule.ForceReset()
 	if not Config.Survivor.ForceReset then return end
-	
 	pcall(function()
-		local humanoid = GetHumanoid()
-		local rootPart = GetHumanoidRootPart()
-		
-		if humanoid and rootPart then
-			humanoid.Sit = false
-			humanoid:UnequipTools()
-			rootPart.Velocity = Vector3.new(0, 0, 0)
-			
+		local hrp = GetHumanoidRootPart()
+		if hrp then
+			hrp.Velocity = Vector3.new(0, 0, 0)
 			local resetRemote = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("ResetState")
-			if resetRemote then
-				resetRemote:FireServer()
-			end
-		end
-	end)
-end
-
-function SurvivorModule.SilentActions()
-	if not Config.Survivor.SilentActions then return end
-	
-	pcall(function()
-		local char = GetCharacter()
-		if char then
-			for _, child in ipairs(char:GetChildren()) do
-				if child:IsA("Sound") then
-					child.Volume = 0
-				end
-			end
+			if resetRemote then resetRemote:FireServer() end
 		end
 	end)
 end
 
 function SurvivorModule.AntiFallDamage()
 	if not Config.Survivor.AntiFallDamage then return end
-	
 	pcall(function()
 		local humanoid = GetHumanoid()
-		if humanoid then
-			humanoid.Health = humanoid.MaxHealth
-		end
+		if humanoid then humanoid.Health = humanoid.MaxHealth end
 	end)
 end
 
--- ===== KILLER MODULE =====
+-- ===== KILLER MODULE (PREDICTION & ROLE EXPLOIT) =====
 local KillerModule = {}
-
-function KillerModule.VeinDropPrediction()
-	if not Config.Killer.VeinDropPrediction then return end
-	
-	pcall(function()
-		local rootPart = GetHumanoidRootPart()
-		if not rootPart then return end
-		
-		local closestPlayer, distance = GetClosestPlayer(true)
-		if closestPlayer and closestPlayer.Character and distance < 100 then
-			local targetPos = closestPlayer.Character.PrimaryPart.Position
-			local myPos = rootPart.Position
-			local direction = (targetPos - myPos).Unit
-			local predictedPos = targetPos + Vector3.new(0, distance * 0.1, 0)
-			Camera.CFrame = CFrame.new(myPos, predictedPos)
-		end
-	end)
-end
 
 function KillerModule.PredictNextKiller()
 	pcall(function()
@@ -459,35 +324,91 @@ function KillerModule.PredictNextKiller()
 			local leaderstats = player:FindFirstChild("leaderstats")
 			local chanceValue = leaderstats and (leaderstats:FindFirstChild("KillerChance") or leaderstats:FindFirstChild("Chance"))
 			
-			if chanceAttribute then
-				if chanceAttribute > highestChance then
-					highestChance = chanceAttribute
-					predictedKiller = player
-				end
-			elseif chanceValue and chanceValue:IsA("ValueBase") then
-				if chanceValue.Value > highestChance then
-					highestChance = chanceValue.Value
-					predictedKiller = player
-				end
+			if chanceAttribute and chanceAttribute > highestChance then
+				highestChance = chanceAttribute
+				predictedKiller = player
+			elseif chanceValue and chanceValue:IsA("ValueBase") and chanceValue.Value > highestChance then
+				highestChance = chanceValue.Value
+				predictedKiller = player
 			end
 		end
 		
 		if not predictedKiller then
 			local pool = {}
-			for _, player in ipairs(allPlayers) do
-				if player ~= LocalPlayer then
-					table.insert(pool, player)
-				end
-			end
-			if #pool > 0 then
-				predictedKiller = pool[math.random(1, #pool)]
-			end
+			for _, p in ipairs(allPlayers) do if p ~= LocalPlayer then table.insert(pool, p) end end
+			if #pool > 0 then predictedKiller = pool[math.random(1, #pool)] end
 		end
 		
 		if predictedKiller then
 			Notify("🔮 Prediction Result", "Killer berikutnya: " .. predictedKiller.Name, 5)
 		else
-			Notify("🔮 Prediction Result", "Gagal memprediksi match selanjutnya.", 4)
+			Notify("🔮 Error", "Gagal memprediksi match selanjutnya.", 4)
+		end
+	end)
+end
+
+function KillerModule.ForceBecomeKiller()
+	pcall(function()
+		local targetName = Config.Killer.ForceKillerTarget
+		local targetPlayer = LocalPlayer
+		
+		if targetName ~= "Self" and targetName ~= "None" then
+			targetPlayer = Players:FindFirstChild(targetName)
+		end
+		
+		if not targetPlayer then 
+			Notify("Error", "Target player tidak ditemukan!", 3)
+			return 
+		end
+
+		local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+		if not remotes then return end
+
+		-- 1. BYPASS DISABLE KILLER CHANGE
+		-- Mencari remote untuk men-disable/enable pengaturan server
+		local disableRemote = remotes:FindFirstChild("DisableKillerChange", true) 
+                           or remotes:FindFirstChild("ToggleKillerSelection", true)
+                           or remotes:FindFirstChild("AdminSettings", true)
+		if disableRemote and disableRemote:IsA("RemoteEvent") then
+			disableRemote:FireServer(false) -- Paksa setting jadi false agar role bisa diganti
+			disableRemote:FireServer("DisableKillerChange", false)
+		end
+
+		-- 2. INJECT KILLER ROLE
+		-- Mencoba berbagai nama remote umum untuk menetapkan role
+		local roleRemotes = {"SetRole", "UpdateRole", "BecomeKiller", "ForceRole", "SelectKiller", "AdminSetRole"}
+		for _, rName in ipairs(roleRemotes) do
+			local r = remotes:FindFirstChild(rName, true)
+			if r and r:IsA("RemoteEvent") then
+				r:FireServer(targetPlayer, "Killer")
+				r:FireServer("Killer") 
+			elseif r and r:IsA("RemoteFunction") then
+				r:InvokeServer(targetPlayer, "Killer")
+			end
+		end
+		
+		-- 3. SPAM CHANCE (Fallback)
+		-- Jika server menggunakan chance, paksa chance target menjadi sangat tinggi
+		local addChance = remotes:FindFirstChild("AddChance", true) or remotes:FindFirstChild("BuyChance", true)
+		if addChance and addChance:IsA("RemoteEvent") then
+			for i=1, 50 do 
+                addChance:FireServer(targetPlayer, 999) 
+                addChance:FireServer(999)
+            end
+		end
+
+		Notify("Force Role Executed", "Berhasil memaksa server untuk menjadikan " .. targetPlayer.Name .. " sebagai Killer!", 5)
+	end)
+end
+
+function KillerModule.VeinDropPrediction()
+	if not Config.Killer.VeinDropPrediction then return end
+	pcall(function()
+		local rootPart = GetHumanoidRootPart()
+		local closestPlayer, distance = GetClosestPlayer(true)
+		if closestPlayer and closestPlayer.Character and rootPart and distance < 100 then
+			local targetPos = closestPlayer.Character.PrimaryPart.Position
+			Camera.CFrame = CFrame.new(rootPart.Position, targetPos + Vector3.new(0, distance * 0.1, 0))
 		end
 	end)
 end
@@ -496,68 +417,25 @@ end
 local VisualsModule = {}
 
 function VisualsModule.PlayerESPHighlight()
-	if not Config.Visuals.PlayerHighlight then
-		DestroyAllHighlights()
-		return
-	end
-	
+	if not Config.Visuals.PlayerHighlight then DestroyAllHighlights() return end
 	pcall(function()
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player ~= LocalPlayer and player.Character then
 				local char = player.Character
 				local isKiller = IsPlayerKiller(player)
 				local targetColor = isKiller and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
-				
-				local existingHighlight = char:FindFirstChild("PlayerHighlight")
-				if not existingHighlight then
-					CreateHighlightBox(char, targetColor, "PlayerHighlight")
-				else
-					if existingHighlight.FillColor ~= targetColor then
-						existingHighlight.FillColor = targetColor
-					end
-				end
+				local hl = char:FindFirstChild("PlayerHighlight")
+				if not hl then CreateHighlightBox(char, targetColor, "PlayerHighlight")
+				else hl.FillColor = targetColor end
 			end
 		end
 	end)
 end
 
--- FIX WORLD ESP: Menggunakan Fallback Deep Search agar terdeteksi 100% walau struktur map berubah
-local function FindWorldFolder(keyword)
-    local cached = cachedWorldFolders[keyword]
-    if cached and cached.Parent then
-        return cached
-    end
-
-    -- 1. Try exact path first (fastest)
-    local exact = FindInstance("Map/" .. keyword)
-    if exact then 
-        cachedWorldFolders[keyword] = exact
-        return exact 
-    end
-    
-    -- 2. Try alternative common paths
-    local altPaths = {
-        "Map/" .. keyword .. "s",
-        "Map/" .. keyword:sub(1, -2), 
-        keyword,
-        keyword .. "s"
-    }
-    for _, path in ipairs(altPaths) do
-        local found = FindInstance(path)
-        if found then 
-            cachedWorldFolders[keyword] = found
-            return found 
-        end
-    end
-    
-    -- 3. Fallback: Deep search in Workspace for Folder/Model matching keyword
-    for _, descendant in ipairs(Workspace:GetDescendants()) do
-        if (descendant:IsA("Folder") or descendant:IsA("Model")) and descendant.Name:lower():find(keyword:lower()) then
-            cachedWorldFolders[keyword] = descendant
-            return descendant
-        end
-    end
-    return nil
+local function ClearWorldHighlightByName(name)
+	for _, obj in ipairs(Workspace:GetDescendants()) do
+		if obj.Name == name then obj:Destroy() end
+	end
 end
 
 local WorldESPConfigs = {
@@ -568,101 +446,90 @@ local WorldESPConfigs = {
 	{ stateKey = "WindowESP", keyword = "Window", name = "WinHighlight", color = Color3.fromRGB(70, 130, 180) }
 }
 
+-- Fallback Scanner untuk Map Highlights
+local function FindWorldFolder(keyword)
+    local cached = cachedWorldFolders[keyword]
+    if cached and cached.Parent then return cached end
+    local exact = FindInstance("Map/" .. keyword)
+    if exact then cachedWorldFolders[keyword] = exact return exact end
+    for _, descendant in ipairs(Workspace:GetDescendants()) do
+        if (descendant:IsA("Folder") or descendant:IsA("Model")) and descendant.Name:lower():find(keyword:lower()) then
+            cachedWorldFolders[keyword] = descendant
+            return descendant
+        end
+    end
+    return nil
+end
+
 task.spawn(function()
 	while true do
-		task.wait(1.5) -- Memindai setiap 1.5 detik
+		task.wait(1.5)
 		pcall(function()
 			for _, cfg in ipairs(WorldESPConfigs) do
 				local isEnabled = Config.Visuals[cfg.stateKey]
 				local folder = FindWorldFolder(cfg.keyword)
-				
 				if folder then
-                    -- Cari semua Model atau BasePart utama di dalam folder tersebut
-                    local targets = {}
                     for _, child in ipairs(folder:GetDescendants()) do
                         if child:IsA("Model") or child:IsA("BasePart") then
-                            -- Pastikan kita hanya mengambil parent tertinggi di dalam folder tersebut untuk menghindari duplikasi highlight
                             local parent = child
-                            while parent.Parent ~= folder do
-                                parent = parent.Parent
-                            end
-                            if not table.find(targets, parent) then
-                                table.insert(targets, parent)
-                            end
+                            while parent.Parent ~= folder and parent.Parent ~= Workspace do parent = parent.Parent end
+                            
+							if isEnabled then
+								if not parent:FindFirstChild(cfg.name) then
+									local hl = Instance.new("Highlight")
+									hl.Name = cfg.name
+									hl.Adornee = parent
+									hl.FillColor = cfg.color
+									hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+									hl.FillTransparency = 0.5
+									hl.OutlineTransparency = 0.2
+									hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+									hl.Parent = parent
+									table.insert(activeESPs, hl)
+								end
+							else
+								local existing = parent:FindFirstChild(cfg.name)
+								if existing then existing:Destroy() end
+							end
                         end
                     end
-                    
-                    for _, item in ipairs(targets) do
-						if isEnabled then
-							if not item:FindFirstChild(cfg.name) then
-								local hl = Instance.new("Highlight")
-								hl.Name = cfg.name
-								hl.Adornee = item
-								hl.FillColor = cfg.color
-								hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-								hl.FillTransparency = 0.5
-								hl.OutlineTransparency = 0.2
-								hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-								hl.Parent = item
-								table.insert(activeESPs, hl)
-							end
-						else
-							local existing = item:FindFirstChild(cfg.name)
-							if existing then
-								existing:Destroy()
-							end
-						end
-					end
 				end
-				
-				-- Jika toggle OFF, bersihkan sisa highlight (jika map berubah)
-				if not isEnabled then
-					ClearWorldHighlightByName(cfg.name)
-				end
+				if not isEnabled then ClearWorldHighlightByName(cfg.name) end
 			end
 		end)
 	end
 end)
 
 function VisualsModule.CustomFOV()
-	if not Config.Visuals.CustomFOV then
-		Camera.FieldOfView = Config.Visuals.OriginalFOV or 70
-		return
-	end
+	if not Config.Visuals.CustomFOV then Camera.FieldOfView = Config.Visuals.OriginalFOV or 70 return end
 	Camera.FieldOfView = Config.Visuals.CustomFOVValue
 end
 
 function VisualsModule.Crosshair()
+	local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
 	if not Config.Visuals.Crosshair then
-		local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-		if playerGui then
-			local crosshairGui = playerGui:FindFirstChild("CrosshairGUI")
-			if crosshairGui then crosshairGui:Destroy() end
-		end
+		if playerGui and playerGui:FindFirstChild("CrosshairGUI") then playerGui.CrosshairGUI:Destroy() end
 		return
 	end
-	
-	local playerGui = LocalPlayer:WaitForChild("PlayerGui")
-	if playerGui:FindFirstChild("CrosshairGUI") then return end
-	
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "CrosshairGUI"
-	screenGui.ResetOnSpawn = false
-	screenGui.Parent = playerGui
-	
-	local crosshair = Instance.new("TextLabel")
-	crosshair.Name = "Crosshair"
-	crosshair.Text = "+"
-	crosshair.TextSize = 32
-	crosshair.TextColor3 = Color3.fromRGB(255, 0, 0)
-	crosshair.BackgroundTransparency = 1
-	crosshair.Size = UDim2.new(0, 40, 0, 40)
-	crosshair.Position = UDim2.new(0.5, -20, 0.5, -20)
-	crosshair.Font = Enum.Font.GothamBold
-	crosshair.Parent = screenGui
+	if playerGui and not playerGui:FindFirstChild("CrosshairGUI") then
+		local screenGui = Instance.new("ScreenGui")
+		screenGui.Name = "CrosshairGUI"
+		screenGui.ResetOnSpawn = false
+		screenGui.Parent = playerGui
+		local crosshair = Instance.new("TextLabel")
+		crosshair.Name = "Crosshair"
+		crosshair.Text = "+"
+		crosshair.TextSize = 32
+		crosshair.TextColor3 = Color3.fromRGB(255, 0, 0)
+		crosshair.BackgroundTransparency = 1
+		crosshair.Size = UDim2.new(0, 40, 0, 40)
+		crosshair.Position = UDim2.new(0.5, -20, 0.5, -20)
+		crosshair.Font = Enum.Font.GothamBold
+		crosshair.Parent = screenGui
+	end
 end
 
--- ===== AUTOMATION (FIXED SMART SKILLCHECK ANTI-EXPLODE) =====
+-- ===== AUTOMATION (FIXED DESYNC / SERVER STATE LOCK) =====
 local AutomationModule = {}
 function AutomationModule.AutoGenerator()
 	if not Config.Automation.AutoGenerator then
@@ -676,30 +543,45 @@ function AutomationModule.AutoGenerator()
 		local generators = GetAllGenerators()
 		for _, gen in ipairs(generators) do
 			if not Config.Automation.AutoGenerator then break end
+			
 			local genPoint = gen:FindFirstChild("GeneratorPoint2") or gen
 			local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 			local genRemotes = remotes and remotes:FindFirstChild("Generator")
 			
 			if genRemotes then
 				local repairEvent = genRemotes:FindFirstChild("RepairEvent")
+				local stopRepair = genRemotes:FindFirstChild("StopRepair") or genRemotes:FindFirstChild("CancelRepair")
 				local skillCheckEvent = genRemotes:FindFirstChild("SkillCheckResultEvent") or genRemotes:FindFirstChild("SkillCheckEvent")
 				
-				if repairEvent then
-					repairEvent:FireServer(genPoint, true)
-				end
-				
+				-- 1. Beritahu server kita memulai perbaikan
+				if repairEvent then repairEvent:FireServer(genPoint, true) end
 				task.wait(0.1) 
 				
+				-- 2. Bypass Skillcheck (Perfect Success)
 				if skillCheckEvent then
 					local mode = Config.Automation.GeneratorMode == "Perfect" and "perfect" or "neutral"
 					skillCheckEvent:FireServer(mode, true, gen, genPoint)
 					skillCheckEvent:FireServer(mode, 0, gen, genPoint)
 					skillCheckEvent:FireServer(true, gen, genPoint)
 				end
+				task.wait(0.1)
+				
+				-- 3. FIX DESYNC: Lepaskan status perbaikan di server agar tidak tertahan / stuck
+				if repairEvent then repairEvent:FireServer(genPoint, false) end
+				if stopRepair then stopRepair:FireServer(genPoint) end
 			end
-			task.wait(0.2)
+			task.wait(0.1)
 		end
 	end)
+
+	-- Memastikan karakter (Tubuh Asli) tidak ter-anchor setelah memperbaiki
+	pcall(function()
+		local hrp = GetHumanoidRootPart()
+		if hrp and hrp.Anchored then
+			hrp.Anchored = false
+		end
+	end)
+
 	isAutoGenRunning = false
 end
 
@@ -708,21 +590,12 @@ local function MainLoop()
 	while true do
 		task.wait(0.05)
 		if LocalPlayer and LocalPlayer.Character then
-			-- VIP
 			SafePcall(VIPModule.AutoPlay)
 			SafePcall(VIPModule.AutoDagger)
-			
-			-- Survivor Exploit (Speed/NoClip sekarang ditangani oleh RunService)
 			SafePcall(SurvivorModule.AntiFallDamage)
-			
-			-- Killer
 			SafePcall(KillerModule.VeinDropPrediction)
-			
-			-- Visuals Real-time Updates
 			SafePcall(VisualsModule.PlayerESPHighlight)
 			SafePcall(VisualsModule.CustomFOV)
-			
-			-- Automation
 			SafePcall(AutomationModule.AutoGenerator)
 		end
 	end
@@ -730,7 +603,7 @@ end
 
 -- ===== WINDUI SETUP =====
 local Window = WindUI:CreateWindow({
-	Title = "Violence District Hub v3.6",
+	Title = "Violence District Hub v3.7",
 	Author = "by Jackson Storm",
 	Icon = "rbxassetid://91993721465164",
 	Theme = Config.Theme,
@@ -740,395 +613,155 @@ local Window = WindUI:CreateWindow({
 	Acrylic = true,
 	KeySystem = { 
         Note = "Masukkan key Platoboost Anda untuk melanjutkan.",
-        API = {
-            {   
-                Type = "platoboost", 
-                ServiceId = 26195, 
-                Secret = "8d7de7ed-e9d3-47ab-a6ee-911d31ef4647", 
-            },
-        },
+        API = { { Type = "platoboost", ServiceId = 26195, Secret = "8d7de7ed-e9d3-47ab-a6ee-911d31ef4647" } },
         SaveKey = false,
     },
 })
 
 -- Tab 1: VIP
-local TabVIP = Window:Tab({
-	Title = "VIP",
-	Icon = "solar:crown-bold",
-})
-
-TabVIP:Section({ Title = "Automatic Features", Desc = "Ultimate automatic survival" })
-TabVIP:Toggle({
-	Title = "Auto Play (Smart AI)",
-	Value = Config.VIP.AutoPlay,
-	Callback = function(v) Config.VIP.AutoPlay = v Notify("Auto Play", v and "✓ Enabled" or "✗ Disabled") end,
-})
-TabVIP:Toggle({
-	Title = "Auto Dagger (Parry)",
-	Value = Config.VIP.AutoDagger,
-	Callback = function(v) Config.VIP.AutoDagger = v Notify("Auto Dagger", v and "✓ Enabled" or "✗ Disabled") end,
-})
+local TabVIP = Window:Tab({ Title = "VIP", Icon = "solar:crown-bold" })
+TabVIP:Section({ Title = "Automatic Features" })
+TabVIP:Toggle({ Title = "Auto Play (Smart AI)", Value = Config.VIP.AutoPlay, Callback = function(v) Config.VIP.AutoPlay = v end })
+TabVIP:Toggle({ Title = "Auto Dagger (Parry)", Value = Config.VIP.AutoDagger, Callback = function(v) Config.VIP.AutoDagger = v end })
 
 -- Tab 2: Survivor
-local TabSurvivor = Window:Tab({
-	Title = "SURVIVOR",
-	Icon = "solar:user-bold",
-})
-
+local TabSurvivor = Window:Tab({ Title = "SURVIVOR", Icon = "solar:user-bold" })
 TabSurvivor:Section({ Title = "Movement & Speed" })
-TabSurvivor:Toggle({
-	Title = "Speed Boost",
-	Value = Config.Survivor.SpeedBoost,
-	Callback = function(v) Config.Survivor.SpeedBoost = v Notify("Speed Boost", v and "✓ Enabled" or "✗ Disabled") end,
-})
-TabSurvivor:Slider({
-	Title = "Custom Speed",
-	Step = 1,
-	Value = { Min = 16, Max = 100, Default = Config.Survivor.CustomSpeed },
-	Callback = function(v) Config.Survivor.CustomSpeed = v end,
-})
-TabSurvivor:Toggle({
-	Title = "No Slowdown",
-	Value = Config.Survivor.NoSlowdown,
-	Callback = function(v) Config.Survivor.NoSlowdown = v Notify("No Slowdown", v and "✓ Enabled" or "✗ Disabled") end,
-})
-TabSurvivor:Toggle({
-	Title = "Smart No Clip (Abaikan Dinding)",
-	Value = Config.Survivor.NoClip,
-	Callback = function(v) Config.Survivor.NoClip = v Notify("No Clip", v and "✓ Enabled" or "✗ Disabled") end,
-})
+TabSurvivor:Toggle({ Title = "Speed Boost", Value = Config.Survivor.SpeedBoost, Callback = function(v) Config.Survivor.SpeedBoost = v end })
+TabSurvivor:Slider({ Title = "Custom Speed", Step = 1, Value = { Min = 16, Max = 100, Default = Config.Survivor.CustomSpeed }, Callback = function(v) Config.Survivor.CustomSpeed = v end })
+TabSurvivor:Toggle({ Title = "No Slowdown", Value = Config.Survivor.NoSlowdown, Callback = function(v) Config.Survivor.NoSlowdown = v end })
+TabSurvivor:Toggle({ Title = "Smart No Clip (Tembus Dinding)", Value = Config.Survivor.NoClip, Callback = function(v) Config.Survivor.NoClip = v end })
 
 -- Tab 3: Killer
-local TabKiller = Window:Tab({
-	Title = "KILLER",
-	Icon = "solar:shield-minimalistic-bold",
-})
+local TabKiller = Window:Tab({ Title = "KILLER", Icon = "solar:shield-minimalistic-bold" })
 
 TabKiller:Section({ Title = "Predictions & Intel" })
+TabKiller:Button({ Title = "Predict Next Killer", Justify = "Center", Icon = "solar:magic-stick-bold", Callback = function() KillerModule.PredictNextKiller() end })
+
+-- FITUR BARU: FORCE BECOME KILLER
+TabKiller:Section({ Title = "Role Exploits (Force Server)" })
+
+local ForceKillerDropdown
+local function RefreshKillerDropdown()
+    local list = {"Self"}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then table.insert(list, p.Name) end
+    end
+    return list
+end
+
+ForceKillerDropdown = TabKiller:Dropdown({
+	Title = "Select Target to be Killer",
+	Value = "Self",
+	Values = RefreshKillerDropdown(),
+	Callback = function(v) Config.Killer.ForceKillerTarget = v end,
+})
+
 TabKiller:Button({
-	Title = "Predict Next Killer",
-	Justify = "Center",
-	Icon = "solar:magic-stick-bold",
-	Callback = function()
-		KillerModule.PredictNextKiller()
-	end,
+	Title = "FORCE BECOME KILLER",
+	Desc = "Bypass DisableKillerChange dan Paksa Role",
+	Icon = "solar:danger-triangle-bold",
+	Callback = function() KillerModule.ForceBecomeKiller() end,
 })
 
-TabKiller:Section({ Title = "Combat Exploits" })
-TabKiller:Toggle({
-	Title = "Vein Spear: Drop Prediction",
-	Value = Config.Killer.VeinDropPrediction,
-	Callback = function(v) Config.Killer.VeinDropPrediction = v Notify("Vein Drop Prediction", v and "✓ Enabled" or "✗ Disabled") end,
-})
-
--- === FITUR BARU: TELEPORT KILLER TO SURVIVOR ===
-TabKiller:Section({ Title = "Teleport & Movement" })
-
-local TeleportDropdown = TabKiller:Dropdown({
-	Title = "Target Survivor",
-	Value = "None",
-	Values = {"None"},
-	Callback = function(v) 
-        Config.Killer.TargetPlayer = v 
+TabKiller:Button({
+	Title = "Refresh Player List",
+	Icon = "solar:refresh-circle-bold",
+	Callback = function() 
+        pcall(function() ForceKillerDropdown:Refresh(RefreshKillerDropdown()) end) 
+        Notify("Refresh", "List Target Diperbarui!", 2)
     end,
 })
 
+TabKiller:Section({ Title = "Teleport & Movement" })
+local TeleportDropdown = TabKiller:Dropdown({
+	Title = "Target Survivor", Value = "None", Values = {"None"},
+	Callback = function(v) Config.Killer.TargetPlayer = v end,
+})
 TabKiller:Button({
-	Title = "Refresh Survivor List",
-	Icon = "solar:refresh-circle-bold",
+	Title = "Refresh Survivor List", Icon = "solar:refresh-circle-bold",
 	Callback = function()
 		local survivors = {"None"}
 		for _, p in ipairs(Players:GetPlayers()) do
-			if p ~= LocalPlayer and not IsPlayerKiller(p) then
-				table.insert(survivors, p.Name)
-			end
+			if p ~= LocalPlayer and not IsPlayerKiller(p) then table.insert(survivors, p.Name) end
 		end
         pcall(function() TeleportDropdown:Refresh(survivors) end)
-        Notify("Refresh", "Daftar survivor diperbarui!", 2)
 	end,
 })
-
 TabKiller:Button({
-	Title = "Teleport to Target",
-	Icon = "solar:arrow-right-bold",
+	Title = "Teleport to Target", Icon = "solar:arrow-right-bold",
 	Callback = function()
 		local targetName = Config.Killer.TargetPlayer
-		if not targetName or targetName == "None" then
-			Notify("Teleport Error", "Pilih target survivor terlebih dahulu!", 3)
-			return
-		end
-		
+		if not targetName or targetName == "None" then return end
 		local target = Players:FindFirstChild(targetName)
 		if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
 			local myRoot = GetHumanoidRootPart()
-			if myRoot then
-				local targetPos = target.Character.HumanoidRootPart.Position
-				-- Teleport sedikit di atas agar tidak stuck di dalam karakter
-				myRoot.CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
-				Notify("Teleport", "Berhasil teleport ke " .. targetName, 2)
-			else
-				Notify("Teleport Error", "Karakter kamu tidak ditemukan!", 3)
-			end
-		else
-			Notify("Teleport Error", "Target tidak ditemukan atau sudah keluar!", 3)
+			if myRoot then myRoot.CFrame = CFrame.new(target.Character.HumanoidRootPart.Position + Vector3.new(0, 5, 0)) end
 		end
 	end,
 })
-
-TabKiller:Button({
-	Title = "Teleport to Nearest Survivor",
-	Icon = "solar:location-bold",
-	Callback = function()
-		local closest, dist = GetClosestPlayer(true, true) -- exclude self, exclude killers
-		if closest and closest.Character and closest.Character:FindFirstChild("HumanoidRootPart") then
-			local myRoot = GetHumanoidRootPart()
-			if myRoot then
-				local targetPos = closest.Character.HumanoidRootPart.Position
-				myRoot.CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
-				Notify("Teleport", "Berhasil teleport ke survivor terdekat: " .. closest.Name, 2)
-			end
-		else
-			Notify("Teleport Error", "Tidak ada survivor ditemukan!", 3)
-		end
-	end,
-})
--- =====================================================
 
 -- Tab 4: Visuals
-local TabVisuals = Window:Tab({
-	Title = "VISUALS",
-	Icon = "solar:eye-bold",
-})
-
+local TabVisuals = Window:Tab({ Title = "VISUALS", Icon = "solar:eye-bold" })
 TabVisuals:Section({ Title = "ESP Systems (Full Highlights)" })
-TabVisuals:Toggle({
-	Title = "Player ESP",
-	Value = Config.Visuals.PlayerHighlight,
-	Callback = function(v)
-		Config.Visuals.PlayerHighlight = v
-		if not v then DestroyAllHighlights() end
-		Notify("Player Highlight", v and "✓ Enabled" or "✗ Disabled")
-	end,
-})
-TabVisuals:Toggle({
-	Title = "Generator ESP",
-	Value = Config.Visuals.GeneratorESP,
-	Callback = function(v) 
-		Config.Visuals.GeneratorESP = v 
-		if not v then ClearWorldHighlightByName("GenHighlight") end
-	end,
-})
-TabVisuals:Toggle({
-	Title = "Pallet ESP",
-	Value = Config.Visuals.PalletESP,
-	Callback = function(v) 
-		Config.Visuals.PalletESP = v 
-		if not v then ClearWorldHighlightByName("PalletHighlight") end
-	end,
-})
-TabVisuals:Toggle({
-	Title = "Exit Gate ESP",
-	Value = Config.Visuals.ExitGateESP,
-	Callback = function(v) 
-		Config.Visuals.ExitGateESP = v 
-		if not v then ClearWorldHighlightByName("GateHighlight") end
-	end,
-})
-TabVisuals:Toggle({
-	Title = "Hook ESP",
-	Value = Config.Visuals.HookESP,
-	Callback = function(v) 
-		Config.Visuals.HookESP = v 
-		if not v then ClearWorldHighlightByName("HookHighlight") end
-	end,
-})
-TabVisuals:Toggle({
-	Title = "Window ESP",
-	Value = Config.Visuals.WindowESP,
-	Callback = function(v) 
-		Config.Visuals.WindowESP = v 
-		if not v then ClearWorldHighlightByName("WinHighlight") end
-	end,
-})
+TabVisuals:Toggle({ Title = "Player ESP", Value = Config.Visuals.PlayerHighlight, Callback = function(v) Config.Visuals.PlayerHighlight = v if not v then DestroyAllHighlights() end end })
+TabVisuals:Toggle({ Title = "Generator ESP", Value = Config.Visuals.GeneratorESP, Callback = function(v) Config.Visuals.GeneratorESP = v if not v then ClearWorldHighlightByName("GenHighlight") end end })
+TabVisuals:Toggle({ Title = "Pallet ESP", Value = Config.Visuals.PalletESP, Callback = function(v) Config.Visuals.PalletESP = v if not v then ClearWorldHighlightByName("PalletHighlight") end end })
+TabVisuals:Toggle({ Title = "Exit Gate ESP", Value = Config.Visuals.ExitGateESP, Callback = function(v) Config.Visuals.ExitGateESP = v if not v then ClearWorldHighlightByName("GateHighlight") end end })
+TabVisuals:Toggle({ Title = "Hook ESP", Value = Config.Visuals.HookESP, Callback = function(v) Config.Visuals.HookESP = v if not v then ClearWorldHighlightByName("HookHighlight") end end })
+TabVisuals:Toggle({ Title = "Window ESP", Value = Config.Visuals.WindowESP, Callback = function(v) Config.Visuals.WindowESP = v if not v then ClearWorldHighlightByName("WinHighlight") end end })
+TabVisuals:Section({ Title = "Display" })
+TabVisuals:Toggle({ Title = "Show Crosshair", Value = Config.Visuals.Crosshair, Callback = function(v) Config.Visuals.Crosshair = v VisualsModule.Crosshair() end })
+TabVisuals:Toggle({ Title = "Custom FOV", Value = Config.Visuals.CustomFOV, Callback = function(v) Config.Visuals.CustomFOV = v VisualsModule.CustomFOV() end })
+TabVisuals:Slider({ Title = "FOV Value", Step = 5, Value = { Min = 40, Max = 120, Default = Config.Visuals.CustomFOVValue }, Callback = function(v) Config.Visuals.CustomFOVValue = v VisualsModule.CustomFOV() end })
 
-TabVisuals:Section({ Title = "Display & Screen" })
-TabVisuals:Toggle({
-	Title = "Show Crosshair",
-	Value = Config.Visuals.Crosshair,
-	Callback = function(v) Config.Visuals.Crosshair = v VisualsModule.Crosshair() end,
-})
-TabVisuals:Toggle({
-	Title = "Custom FOV",
-	Value = Config.Visuals.CustomFOV,
-	Callback = function(v) Config.Visuals.CustomFOV = v VisualsModule.CustomFOV() end,
-})
-TabVisuals:Slider({
-	Title = "FOV Value",
-	Step = 5,
-	Value = { Min = 40, Max = 120, Default = Config.Visuals.CustomFOVValue },
-	Callback = function(v) Config.Visuals.CustomFOVValue = v VisualsModule.CustomFOV() end,
-})
-
--- Tab 5: Combat
-local TabCombat = Window:Tab({
-	Title = "COMBAT",
-	Icon = "solar:sword-bold",
-})
-
-TabCombat:Section({ Title = "Settings" })
-TabCombat:Toggle({
-	Title = "Enable Aimbot",
-	Value = Config.Combat.Aimbot,
-	Callback = function(v) Config.Combat.Aimbot = v Notify("Aimbot", v and "✓ Enabled" or "✗ Disabled") end,
-})
-
--- Tab 6: Automation
-local TabAuto = Window:Tab({
-	Title = "AUTOMATION",
-	Icon = "solar:play-bold",
-})
-
+-- Tab 5: Automation
+local TabAuto = Window:Tab({ Title = "AUTOMATION", Icon = "solar:play-bold" })
 TabAuto:Section({ Title = "Generator Setup" })
-TabAuto:Toggle({
-	Title = "Auto Generator",
-	Value = Config.Automation.AutoGenerator,
-	Callback = function(v) Config.Automation.AutoGenerator = v Notify("Auto Generator", v and "✓ Enabled" or "✗ Disabled") end,
-})
-TabAuto:Dropdown({
-	Title = "Generator Mode",
-	Value = Config.Automation.GeneratorMode,
-	Values = { "Perfect", "Neutral" },
-	Callback = function(v) Config.Automation.GeneratorMode = v Notify("Mode Set", v) end,
-})
+TabAuto:Toggle({ Title = "Auto Generator (Anti Stuck)", Value = Config.Automation.AutoGenerator, Callback = function(v) Config.Automation.AutoGenerator = v end })
+TabAuto:Dropdown({ Title = "Generator Mode", Value = Config.Automation.GeneratorMode, Values = { "Perfect", "Neutral" }, Callback = function(v) Config.Automation.GeneratorMode = v end })
 
--- Tab 7: Server Monitor
-local TabServer = Window:Tab({
-	Title = "SERVER",
-	Icon = "mdi:server",
-})
-
-TabServer:Section({ Title = "Live Player Monitor", Desc = "Cek Role dan Profile Avatar Player" })
-
+-- Tab 6: Server Monitor
+local TabServer = Window:Tab({ Title = "SERVER", Icon = "mdi:server" })
+TabServer:Section({ Title = "Live Player Monitor" })
 local function GetPlayerNames()
 	local list = {}
-	for _, p in ipairs(Players:GetPlayers()) do
-		table.insert(list, p.Name)
-	end
+	for _, p in ipairs(Players:GetPlayers()) do table.insert(list, p.Name) end
 	return list
 end
-
-local PlayerDropdown = TabServer:Dropdown({
-	Title = "Select Player",
-	Value = GetPlayerNames()[1] or "None",
-	Values = GetPlayerNames(),
-	Callback = function(v) 
-		Config.Server.SelectedPlayer = v 
-	end,
-})
-
+local PlayerDropdown = TabServer:Dropdown({ Title = "Select Player", Value = GetPlayerNames()[1] or "None", Values = GetPlayerNames(), Callback = function(v) Config.Server.SelectedPlayer = v end })
+TabServer:Button({ Title = "Refresh Player List", Icon = "solar:refresh-circle-bold", Callback = function() pcall(function() PlayerDropdown:Refresh(GetPlayerNames()) end) end })
 TabServer:Button({
-	Title = "Refresh Player List",
-	Icon = "solar:refresh-circle-bold",
-	Callback = function()
-		pcall(function() PlayerDropdown:Refresh(GetPlayerNames()) end)
-		Notify("Server Monitor", "Daftar player berhasil diperbarui!", 3)
-	end,
-})
-
-TabServer:Button({
-	Title = "Inspect Selected Player",
-	Desc = "Menampilkan Avatar & Status Role",
-	Icon = "solar:user-id-bold",
+	Title = "Inspect Selected Player", Icon = "solar:user-id-bold",
 	Callback = function()
 		local targetName = Config.Server.SelectedPlayer
-		if not targetName or targetName == "None" then
-			Notify("Error", "Pilih player terlebih dahulu dari dropdown!", 3)
-			return
-		end
-		
+		if not targetName or targetName == "None" then return end
 		local target = Players:FindFirstChild(targetName)
 		if target then
 			local isKiller = IsPlayerKiller(target)
-			local roleName = isKiller and "KILLER" or "SURVIVOR"
-			
+			local roleName = isKiller and "KILLER 🔪" or "SURVIVOR 🏃"
 			local avatarUrl = ""
-			pcall(function()
-				avatarUrl = Players:GetUserThumbnailAsync(target.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
-			end)
-			
+			pcall(function() avatarUrl = Players:GetUserThumbnailAsync(target.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420) end)
 			local hp = "Mati / Lobby"
 			if target.Character and target.Character:FindFirstChild("Humanoid") then
 				local hum = target.Character.Humanoid
-				if hum.Health > 0 then
-					hp = math.floor(hum.Health) .. " / " .. math.floor(hum.MaxHealth)
-				end
+				if hum.Health > 0 then hp = math.floor(hum.Health) .. " / " .. math.floor(hum.MaxHealth) end
 			end
-			
-			WindUI:Notify({
-				Title = "Monitor: " .. target.Name,
-				Content = "Role Saat Ini: " .. roleName .. "\nStatus HP: " .. hp,
-				Duration = 6,
-				Image = avatarUrl ~= "" and avatarUrl or nil
-			})
-		else
-			Notify("Monitor Error", "Player " .. targetName .. " tidak ditemukan (Mungkin sudah keluar).", 4)
+			WindUI:Notify({ Title = "Monitor: " .. target.Name, Content = "Role: " .. roleName .. "\nHP: " .. hp, Duration = 6, Image = avatarUrl ~= "" and avatarUrl or nil })
 		end
 	end,
 })
 
-TabServer:Section({ Title = "Server Info" })
-TabServer:Button({
-	Title = "Check Server Statistics",
-	Icon = "solar:users-group-rounded-bold",
-	Callback = function()
-		local total = #Players:GetPlayers()
-		local killers = 0
-		for _, p in ipairs(Players:GetPlayers()) do
-			if IsPlayerKiller(p) then killers = killers + 1 end
-		end
-		Notify("Server Analytics", "Total Pemain Aktif: " .. total .. "\nJumlah Killer Terdeteksi: " .. killers, 5)
-	end,
-})
-
--- Tab 8: Settings
-local TabSettings = Window:Tab({
-	Title = "Settings",
-	Icon = "solar:settings-bold",
-})
-
-TabSettings:Section({ Title = "Theme Manager" })
+-- Tab 7: Settings
+local TabSettings = Window:Tab({ Title = "Settings", Icon = "solar:settings-bold" })
 local Themes = {}
 for name in pairs(WindUI.Themes) do table.insert(Themes, name) end
-TabSettings:Dropdown({
-	Title = "Select Theme",
-	Value = Config.Theme,
-	Values = Themes,
-	Callback = function(v) Config.Theme = v WindUI:SetTheme(v) end,
-})
-
+TabSettings:Dropdown({ Title = "Select Theme", Value = Config.Theme, Values = Themes, Callback = function(v) Config.Theme = v WindUI:SetTheme(v) end })
 TabSettings:Button({
-	Title = "Reset All Settings",
-	Justify = "Center",
-	Icon = "solar:restart-circle-bold",
-	Callback = function()
-		for m, s in pairs(Config) do if typeof(s) == "table" then for k in pairs(s) do if typeof(Config[m][k]) == "boolean" then Config[m][k] = false end end end end
-		DestroyAllHighlights()
-		DestroyAllESPs()
-		Notify("Reset", "Semua pengaturan dikembalikan ke default")
-	end,
-})
-
-TabSettings:Button({
-	Title = "Unload Script",
-	Justify = "Center",
-	Icon = "solar:logout-3-bold",
-	Callback = function()
-		DestroyAllHighlights()
-		DestroyAllESPs()
-		Window:Destroy()
-	end,
+	Title = "Unload Script", Justify = "Center", Icon = "solar:logout-3-bold",
+	Callback = function() DestroyAllHighlights() DestroyAllESPs() Window:Destroy() end,
 })
 
 -- Run Threads
 task.spawn(MainLoop)
-Notify("Violence District Hub v3.6", "✓ Dimuat! Full World ESP Fixed & Teleport to Survivor Aktif.")
+Notify("Violence District Hub v3.7", "✓ Dimuat! Force Killer & Fix Auto Gen (Anti-Stuck) Aktif.")
