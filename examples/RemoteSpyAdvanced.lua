@@ -226,7 +226,7 @@ local function DestroyAllHighlights()
 	activeHighlights = {}
 end
 
-local function ClearWorldHighlightByName(name)
+--[[local function ClearWorldHighlightByName(name)
     for i = #activeESPs, 1, -1 do
         local esp = activeESPs[i]
         if esp and esp.Name == name then
@@ -244,7 +244,7 @@ local function DestroyAllESPs()
 		end
 		table.remove(activeESPs, i)
 	end
-end
+end]]--
 
 local function Notify(title, content, duration)
 	duration = duration or 3
@@ -747,7 +747,7 @@ local Window = WindUI:CreateWindow({
                 Secret = "8d7de7ed-e9d3-47ab-a6ee-911d31ef4647", 
             },
         },
-        SaveKey = true,
+        SaveKey = false,
     },
 })
 
