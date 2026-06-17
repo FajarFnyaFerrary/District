@@ -1,7 +1,7 @@
 --[[
-Violence District - Ultimate Mod Hub v4.0
+Violence District - Ultimate Mod Hub v3.9
 FIXED: Auto Gen 100% Progres + Anti-Teleport/Rubberband saat Lari dari Killer
-ADDED: Manual Server Control untuk AllowKiller (True/False) + Force Become Killer Bypass
+ADDED: Force Become Killer (Bypass DisableKillerChange via changeoption)
 Author: .ftgs | Enhanced by Gemini & User
 ]]
 local cloneref = (cloneref or clonereference or function(instance)
@@ -347,32 +347,6 @@ end
 end)
 end
 
--- FUNGSI BARU: KONTROL MANUAL ALLOWKILLER
-function KillerModule.SetAllowKiller(value)
-pcall(function()
-local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-if not remotes then 
-Notify("Error", "Folder Remotes tidak ditemukan!", 3)
-return 
-end
-
-local optionsFolder = remotes:FindFirstChild("Options")
-if optionsFolder then
-local changeoption = optionsFolder:FindFirstChild("changeoption")
-if changeoption and changeoption:IsA("RemoteEvent") then
--- Fire remote untuk mengubah AllowKiller sesuai nilai boolean (true/false)
-changeoption:FireServer("AllowKiller", value)
-local statusText = value and "TRUE (Izinkan Ganti Role)" or "FALSE (Kunci Role / Disable Change)"
-Notify("Server Option Updated", "AllowKiller berhasil diubah menjadi: " .. statusText, 4)
-else
-Notify("Error", "Remote 'changeoption' tidak ditemukan di folder Options!", 3)
-end
-else
-Notify("Error", "Folder 'Options' tidak ditemukan di Remotes!", 3)
-end
-end)
-end
-
 function KillerModule.ForceBecomeKiller()
 pcall(function()
 local targetName = Config.Killer.ForceKillerTarget
@@ -665,7 +639,7 @@ end
 
 -- ===== WINDUI SETUP =====
 local Window = WindUI:CreateWindow({
-Title = "Violence District Hub v4.0",
+Title = "Violence District Hub v3.9",
 Author = "by Jackson Storm",
 Icon = "rbxassetid://91993721465164",
 Theme = Config.Theme,
@@ -727,21 +701,6 @@ Callback = function()
 pcall(function() ForceKillerDropdown:Refresh(RefreshKillerDropdown()) end)
 Notify("Refresh", "List Target Diperbarui!", 2)
 end,
-})
-
--- FITUR BARU: KONTROL MANUAL ALLOWKILLER
-TabKiller:Section({ Title = "Server Options Control (AllowKiller)" })
-TabKiller:Button({
-Title = "Set AllowKiller (Enable)",
-Desc = "Izinkan perubahan Killer (Bypass Disable)",
-Icon = "solar:unlock-bold",
-Callback = function() KillerModule.SetAllowKiller(true) end,
-})
-TabKiller:Button({
-Title = "Set AllowKiller (Disable)",
-Desc = "Kunci perubahan Killer (Disable Change)",
-Icon = "solar:lock-bold",
-Callback = function() KillerModule.SetAllowKiller(false) end,
 })
 
 TabKiller:Section({ Title = "Teleport & Movement" })
@@ -817,7 +776,7 @@ if not targetName or targetName == "None" then return end
 local target = Players:FindFirstChild(targetName)
 if target then
 local isKiller = IsPlayerKiller(target)
-local roleName = isKiller and "KILLER" or "SURVIVOR"
+local roleName = isKiller and "KILLER 🔪" or "SURVIVOR 🏃"
 local avatarUrl = ""
 pcall(function() avatarUrl = Players:GetUserThumbnailAsync(target.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420) end)
 local hp = "Mati / Lobby"
@@ -842,4 +801,4 @@ Callback = function() DestroyAllHighlights() Window:Destroy() end,
 
 -- Run Threads
 task.spawn(MainLoop)
-Notify("Violence District Hub v4.0", "✓ Dimuat! Kontrol AllowKiller & Auto Gen Anti-Rubberband Aktif.")
+Notify("Violence District Hub v3.9", "✓ Dimuat! Auto Gen 100% Progres & Force Killer Bypass Aktif.")
